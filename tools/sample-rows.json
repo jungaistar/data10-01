@@ -1,0 +1,113 @@
+{
+  "_설명": "실시간 연결 받는 형식 표본(가상 값). rows 배열에 2초마다의 행. time 은 벽시계(yyyy-mm-dd hh:mm:ss). press·time 은 꼭, 나머지는 있는 만큼. 배열만 보내도 되고 한 행 객체만 보내도 됩니다.",
+  "rows": [
+    {
+      "time": "2026-10-27 10:00:00",
+      "press": "P1",
+      "pressType": "유압 프레스 800톤",
+      "die": "M-01",
+      "pressCum": 1890000,
+      "dieCum": 12000,
+      "current": 85.77,
+      "voltage": 380.42,
+      "temp": 45,
+      "vib": 2.066
+    },
+    {
+      "time": "2026-10-27 10:00:00",
+      "press": "P2",
+      "pressType": "유압 프레스 800톤",
+      "die": "M-03",
+      "pressCum": 2264000,
+      "dieCum": 41000,
+      "current": 92.67,
+      "voltage": 380.41,
+      "temp": 47.07,
+      "vib": 2.179
+    },
+    {
+      "time": "2026-10-27 10:00:00",
+      "press": "P3",
+      "pressType": "기계식 프레스 400톤",
+      "die": "M-05",
+      "pressCum": 5221000,
+      "dieCum": 118000,
+      "current": 58.2,
+      "voltage": 380.32,
+      "temp": 42.04,
+      "vib": 2.968
+    },
+    {
+      "time": "2026-10-27 10:00:02",
+      "press": "P1",
+      "pressType": "유압 프레스 800톤",
+      "die": "M-01",
+      "pressCum": 1890000,
+      "dieCum": 12000,
+      "current": 86.73,
+      "voltage": 381.38,
+      "temp": 44.96,
+      "vib": 2.039
+    },
+    {
+      "time": "2026-10-27 10:00:02",
+      "press": "P2",
+      "pressType": "유압 프레스 800톤",
+      "die": "M-03",
+      "pressCum": 2264000,
+      "dieCum": 41000,
+      "current": 92.16,
+      "voltage": 380.49,
+      "temp": 46.99,
+      "vib": 2.223
+    },
+    {
+      "time": "2026-10-27 10:00:02",
+      "press": "P3",
+      "pressType": "기계식 프레스 400톤",
+      "die": "M-05",
+      "pressCum": 5221000,
+      "dieCum": 118000,
+      "current": 58.07,
+      "voltage": 379.11,
+      "temp": 42.09,
+      "vib": 2.945
+    },
+    {
+      "time": "2026-10-27 10:00:04",
+      "press": "P1",
+      "pressType": "유압 프레스 800톤",
+      "die": "M-01",
+      "pressCum": 1890000,
+      "dieCum": 12000,
+      "current": 86.5,
+      "voltage": 380.31,
+      "temp": 44.94,
+      "vib": 2.02
+    },
+    {
+      "time": "2026-10-27 10:00:04",
+      "press": "P2",
+      "pressType": "유압 프레스 800톤",
+      "die": "M-03",
+      "pressCum": 2264000,
+      "dieCum": 41000,
+      "current": 92.5,
+      "voltage": 380.37,
+      "temp": 47.01,
+      "vib": 2.233
+    },
+    {
+      "time": "2026-10-27 10:00:04",
+      "press": "P3",
+      "pressType": "기계식 프레스 400톤",
+      "die": "M-05",
+      "pressCum": 5221000,
+      "dieCum": 118000,
+      "current": 57.98,
+      "voltage": 379.3,
+      "temp": 42.03,
+      "vib": 2.98
+    }
+  ]
+}
