@@ -50,7 +50,7 @@ await test('since — 그 뒤 행만(오래된 것부터), CSV 도 같은 행', 
   assert.ok(/^time,press,pressType/.test(csv));
 });
 await test('OPTIONS 미리 묻기 204 · 고장 징후 넣기 · 상태', async () => {
-  const o = await fetch(base + '/api/rows', { method: 'OPTIONS', headers: { 'Access-Control-Request-Private-Network': 'true', Origin: 'https://aebonlee.github.io' } });
+  const o = await fetch(base + '/api/rows', { method: 'OPTIONS', headers: { 'Access-Control-Request-Private-Network': 'true', Origin: 'https://data10-01.jobability.co.kr' } });
   assert.equal(o.status, 204); assert.equal(o.headers.get('access-control-allow-private-network'), 'true');
   const i = await (await fetch(base + '/api/inject?press=P2&kind=heat')).json();
   assert.equal(i.ok, true); assert.equal(i.faults.P2.kind, 'heat');

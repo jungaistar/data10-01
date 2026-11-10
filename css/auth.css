@@ -1,0 +1,184 @@
+/* data10 로그인 키트 — 정본: data10-00/kit/auth/css/auth.css (사본을 직접 고치지 말 것)
+   로그인 전 대문 · 사용 신청 · 승인 대기 · 구성원 관리 창. 클래스는 모두 ag- / auth- 로 시작해 도구 화면과 섞이지 않는다. */
+:root {
+  --ag-ink: #172334; --ag-sub: #55657a; --ag-line: #d6dee8; --ag-bg: #f3f6f9;
+  --ag-navy: #13274b; --ag-navy-2: #0c1b36; --ag-brand: #1f5fa8; --ag-brand-d: #174a84;
+  --ag-ok: #1b6e3a; --ag-ok-bg: #e5f3ea; --ag-err: #b3261e; --ag-err-bg: #fdecea; --ag-warn: #7a5200; --ag-warn-bg: #fff4d6;
+  --ag-accent: #a9c2e2;
+  --ag-pad: 20px;
+}
+@media (min-width: 640px) { :root { --ag-pad: 28px; } }
+@media (min-width: 1024px) { :root { --ag-pad: 40px; } }
+
+/* 로그인 전에는 도구 화면을 감춘다(자리는 그대로 — 그래프 폭 계산이 흔들리지 않게 visibility) */
+html.auth-lock body > *:not(#authGate) { visibility: hidden; }
+html.auth-lock body { overflow: hidden; }
+
+.ag {
+  position: fixed; inset: 0; z-index: 2000; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: var(--ag-bg); color: var(--ag-ink);
+  font: 16px/1.65 Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+  word-break: keep-all; overflow-wrap: break-word;
+}
+.ag[hidden] { display: none; }
+.ag *, .ag *::before, .ag *::after, .ag-modal * { box-sizing: border-box; }
+
+.ag-wrap {
+  max-width: calc(1180px + 2 * var(--ag-pad)); margin: 0 auto; padding: 0 var(--ag-pad);
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 0;
+}
+.ag-hero {
+  background: linear-gradient(160deg, var(--ag-navy) 0%, var(--ag-navy-2) 100%); color: #fff;
+  margin: 0 calc(-1 * var(--ag-pad)); padding: 36px var(--ag-pad) 32px;
+}
+.ag-side { padding: 24px 0 8px; }
+@media (min-width: 960px) {
+  .ag { background: linear-gradient(90deg, var(--ag-navy-2) 0, var(--ag-navy-2) 50%, var(--ag-bg) 50%); }
+  .ag-wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: calc(100vh - 48px); align-items: center; }
+  .ag-hero { margin: 0; padding: 56px 48px 56px 0; background: none; min-height: 100%; display: flex; flex-direction: column; justify-content: center; }
+  .ag-side { padding: 56px 0 56px 48px; }
+}
+.ag-eyebrow { margin: 0 0 10px; font-size: 13.5px; letter-spacing: .02em; color: var(--ag-accent); }
+.ag-hero h1 { margin: 0 0 14px; font-size: clamp(26px, 3.6vw, 38px); line-height: 1.3; color: #fff; font-weight: 800; }
+.ag-lead { margin: 0 0 24px; color: #d7e3f2; font-size: 16.5px; max-width: 640px; }
+.ag-feats { list-style: none; margin: 0 0 24px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@media (min-width: 640px) { .ag-feats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ag-feats li { border: 1px solid rgba(255, 255, 255, .14); border-radius: 12px; padding: 14px 16px; background: rgba(255, 255, 255, .05); }
+.ag-feats b { display: block; color: #fff; font-size: 15.5px; margin-bottom: 4px; }
+.ag-feats span { display: block; color: #c4d3e6; font-size: 14px; line-height: 1.55; }
+.ag-flow-t { margin: 0 0 8px; font-size: 13.5px; color: #a9c2e2; }
+.ag-flow ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.ag-flow li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: rgba(255, 255, 255, .08); color: #e6eef8; font-size: 14px; }
+.ag-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #fff; color: var(--ag-navy); font-weight: 700; font-size: 13px; }
+
+.ag-card { background: #fff; border: 1px solid var(--ag-line); border-radius: 16px; padding: 26px 24px; box-shadow: 0 10px 30px rgba(15, 30, 55, .08); max-width: 460px; margin: 0 auto; }
+.ag-card h2 { margin: 6px 0 8px; font-size: 21px; color: var(--ag-ink); }
+.ag-card p { margin: 0 0 12px; }
+.ag-sub { color: var(--ag-sub); font-size: 14.5px; }
+.ag-tabs { display: flex; gap: 4px; padding: 4px; background: #eef2f6; border-radius: 10px; margin: 0 0 18px; }
+.ag-tabs button { flex: 1; border: 0; background: transparent; padding: 9px 10px; border-radius: 8px; font: inherit; font-weight: 600; color: var(--ag-sub); cursor: pointer; }
+.ag-tabs button[aria-selected="true"] { background: #fff; color: var(--ag-ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.ag-form { display: grid; gap: 12px; }
+.ag-form label { display: grid; gap: 5px; font-size: 14px; font-weight: 600; color: var(--ag-ink); }
+.ag-form small { font-weight: 400; color: var(--ag-sub); }
+.ag-form input { font: inherit; font-size: 16px; font-weight: 400; padding: 10px 12px; border: 1px solid var(--ag-line); border-radius: 9px; background: #fff; color: var(--ag-ink); width: 100%; }
+.ag-form input::placeholder { color: #8a97a8; font-weight: 400; }
+.ag-form input:focus { outline: 2px solid var(--ag-brand); outline-offset: 1px; border-color: var(--ag-brand); }
+.ag-btn { font: inherit; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 16px;
+  border-radius: 10px; border: 1px solid var(--ag-line); background: #fff; color: var(--ag-ink); cursor: pointer; width: 100%; }
+.ag-btn:hover { border-color: var(--ag-brand); }
+.ag-btn:disabled { opacity: .6; cursor: progress; }
+.ag-primary { background: var(--ag-brand); border-color: var(--ag-brand); color: #fff; }
+.ag-primary:hover { background: var(--ag-brand-d); }
+.ag-kakao { background: #fee500; border-color: #fee500; color: #191600; }
+.ag-or { display: flex; align-items: center; gap: 10px; color: var(--ag-sub); font-size: 13px; margin: 14px 0; }
+.ag-or::before, .ag-or::after { content: ''; flex: 1; height: 1px; background: var(--ag-line); }
+.ag-hint { margin: 14px 0 0 !important; color: var(--ag-sub); font-size: 13.5px; }
+.ag-msg { margin: 12px 0 0 !important; font-size: 14px; min-height: 1em; color: var(--ag-sub); }
+.ag-msg:empty { display: none; }
+.ag-msg.is-err { color: var(--ag-err); background: var(--ag-err-bg); padding: 8px 12px; border-radius: 8px; }
+.ag-msg.is-ok { color: var(--ag-ok); background: var(--ag-ok-bg); padding: 8px 12px; border-radius: 8px; }
+.ag-link { border: 0; background: none; color: var(--ag-sub); text-decoration: underline; font: inherit; font-size: 14px; cursor: pointer; margin-top: 14px; padding: 6px 0; }
+.ag-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--ag-warn-bg); color: var(--ag-warn); font-size: 13px; font-weight: 700; }
+.ag-badge.is-off { background: var(--ag-err-bg); color: var(--ag-err); }
+.ag-claim { margin-top: 16px; padding: 14px; border: 1px dashed var(--ag-line); border-radius: 10px; font-size: 14px; color: var(--ag-sub); }
+.ag-foot { text-align: center; color: var(--ag-sub); font-size: 13px; margin: 0; padding: 14px var(--ag-pad) 22px; }
+@media (min-width: 960px) { .ag-foot { color: #8fa3bd; text-align: left; max-width: calc(1180px + 2 * var(--ag-pad)); margin: 0 auto; } }
+
+/* 상단 바 계정 칩 */
+.auth-chip { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: nowrap; font-size: 13.5px; }
+.auth-chip.is-float { position: fixed; top: 10px; right: 10px; z-index: 1500; background: #fff; border: 1px solid var(--ag-line); border-radius: 999px; padding: 4px 6px 4px 12px; }
+.auth-chip-name { max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.auth-chip-btn { font: inherit; font-size: 13px; border: 1px solid var(--ag-line); background: #fff; color: var(--ag-ink); border-radius: 8px; padding: 5px 10px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.auth-chip-btn:hover { border-color: var(--ag-brand); color: var(--ag-brand); }
+.auth-chip-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--ag-err); color: #fff; font-size: 11.5px; font-weight: 700; }
+.auth-chip-n[hidden] { display: none; }
+@media (max-width: 639px) { .auth-chip-name { display: none; } }
+
+/* 구성원 관리 창 */
+.ag-modal { position: fixed; inset: 0; z-index: 2100; background: rgba(10, 20, 35, .5); display: flex; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow-y: auto;
+  font: 15px/1.6 Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; color: var(--ag-ink); word-break: keep-all; overflow-wrap: break-word; }
+.ag-modal[hidden] { display: none; }
+.ag-panel { background: #fff; border-radius: 14px; width: 100%; max-width: 980px; padding: 20px 22px 24px; }
+.ag-panel-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ag-panel-h h2 { margin: 0; font-size: 20px; }
+.ag-x { border: 0; background: none; font-size: 26px; line-height: 1; cursor: pointer; color: var(--ag-sub); padding: 4px 8px; }
+.ag-panel .ag-tabs { max-width: 320px; margin: 12px 0; }
+.ag-tablewrap { overflow-x: auto; }
+.ag-table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.ag-table th, .ag-table td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--ag-line); }
+.ag-table th { background: #f1f4f8; font-size: 13.5px; white-space: nowrap; }
+.ag-table small { color: var(--ag-sub); }
+.ag-acts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 150px; }
+.ag-btn.ag-sm { width: auto; min-height: 34px; padding: 4px 10px; font-size: 13.5px; }
+.ag-st { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: #eef2f6; color: var(--ag-sub); }
+.ag-st.is-pending { background: var(--ag-warn-bg); color: var(--ag-warn); }
+.ag-st.is-active { background: var(--ag-ok-bg); color: var(--ag-ok); }
+.ag-st.is-disabled { background: var(--ag-err-bg); color: var(--ag-err); }
+.ag-st.is-admin { background: #e6eef9; color: var(--ag-brand-d); }
+/* 밝은 테마(plan.json landing.theme = "light") — 바탕은 --ag-bg, 글자는 --ag-ink, 강조는 --ag-accent */
+.ag-light, .ag-light .ag-hero { background: var(--ag-bg); }
+@media (min-width: 960px) { .ag.ag-light { background: var(--ag-bg); } }
+.ag-light .ag-hero { color: var(--ag-ink); }
+.ag-light .ag-hero h1 { color: var(--ag-navy); font-size: clamp(30px, 4.2vw, 46px); line-height: 1.25; }
+.ag-light .ag-eyebrow { font-size: 16px; font-weight: 700; }
+.ag-light .ag-lead { color: var(--ag-sub); font-size: 17px; }
+.ag-light .ag-feats li { background: #fff; border-color: var(--ag-line); }
+.ag-light .ag-feats b { color: var(--ag-ink); }
+.ag-light .ag-feats span { color: var(--ag-sub); }
+.ag-light .ag-flow-t { color: var(--ag-sub); }
+.ag-light .ag-flow li { background: #fff; color: var(--ag-ink); border: 1px solid var(--ag-line); }
+.ag-light .ag-n { background: var(--ag-navy); color: #fff; }
+.ag-light .ag-primary { background: var(--ag-navy); border-color: var(--ag-navy); }
+.ag-light .ag-primary:hover { background: var(--ag-navy-2); }
+@media (min-width: 960px) { .ag-light .ag-foot { color: var(--ag-sub); } }
+/* 대문 그림(SVG) — 현장 데이터 → 관리도. 색은 currentColor 하나로(테마마다 .ag-art color 만 바꾼다) */
+.ag-hero { position: relative; overflow: hidden; }
+.ag-hero > :not(.ag-art) { position: relative; z-index: 1; }
+.ag-art { position: absolute; z-index: 0; pointer-events: none; color: #7fa6d6; opacity: .3;
+  right: -40px; top: 8px; width: min(560px, 78%); height: auto; }
+.ag-par { transition: transform .6s cubic-bezier(.2, .7, .2, 1); }
+.ag-line { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
+.ag-ucl { stroke: currentColor; stroke-width: 1; stroke-dasharray: 5 6; opacity: .55; }
+.ag-lbl { fill: currentColor; font-size: 12px; opacity: .7; font-family: inherit; }
+.ag-pt { fill: var(--ag-navy-2); stroke: currentColor; stroke-width: 2; }
+.ag-ring { fill: none; stroke: currentColor; stroke-width: 2; transform-box: fill-box; transform-origin: center; opacity: 0; }
+@media (max-width: 639px) { .ag-art { width: 92%; right: -24px; top: 0; opacity: .28; } .ag-lbl { display: none; } }
+/* 데스크톱: 왼쪽 칸 맨 아래 띠(내용과 겹치지 않게 그만큼 아래 여백을 둔다) */
+@media (min-width: 960px) {
+  .ag-hero { padding-bottom: 210px; }
+  .ag-art { top: auto; bottom: 34px; left: 0; right: 32px; width: auto; max-width: 600px; opacity: .55; }
+}
+.ag-light .ag-art { color: var(--ag-navy); opacity: .26; }
+.ag-light .ag-pt { fill: var(--ag-bg); }
+
+/* 「이렇게 씁니다」 단계 — 차례로 밝아진다(그림의 점과 함께) */
+.ag-flow li { transition: background-color .35s, box-shadow .35s, color .35s; }
+.ag-flow li.is-on { background: rgba(255, 255, 255, .18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .45); color: #fff; }
+.ag-light .ag-flow li.is-on { background: #fff; box-shadow: inset 0 0 0 1.5px var(--ag-navy); color: var(--ag-navy); }
+
+/* 효과 — .ag-fx 는 JS 가 처음 한 번만 붙인다(모션 최소화면 붙이지 않음). 효과가 없어도 모든 내용은 보인다. */
+@keyframes agDraw { to { stroke-dashoffset: 0; } }
+@keyframes agFade { from { opacity: 0; } }
+@keyframes agUp { from { opacity: 0; transform: translateY(12px); } }
+@keyframes agPop { from { opacity: 0; transform: scale(.4); } }
+@keyframes agPulse { 0% { opacity: .85; transform: scale(.6); } 100% { opacity: 0; transform: scale(2.2); } }
+.ag-fx .ag-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: agDraw 1.8s cubic-bezier(.4, 0, .2, 1) .2s forwards; }
+.ag-fx .ag-area { animation: agFade 1.2s ease 1s both; }
+.ag-fx .ag-pt { transform-box: fill-box; transform-origin: center; animation: agPop .45s cubic-bezier(.2, .9, .3, 1.4) var(--d, 1s) both; }
+.ag-fx .ag-eyebrow, .ag-fx .ag-hero h1, .ag-fx .ag-lead { animation: agUp .6s ease both; }
+.ag-fx .ag-hero h1 { animation-delay: .08s; } .ag-fx .ag-lead { animation-delay: .16s; }
+.ag-fx .ag-feats li { animation: agUp .55s ease both; }
+.ag-fx .ag-feats li:nth-child(1) { animation-delay: .28s; } .ag-fx .ag-feats li:nth-child(2) { animation-delay: .36s; }
+.ag-fx .ag-feats li:nth-child(3) { animation-delay: .44s; } .ag-fx .ag-feats li:nth-child(4) { animation-delay: .52s; }
+.ag-fx .ag-flow { animation: agUp .55s ease .62s both; }
+.ag-fx .ag-card { animation: agUp .6s ease .18s both; }
+.ag-ring { animation: agPulse 2.4s ease-out infinite; }
+.ag-feats li { transition: border-color .25s, background-color .25s; }
+.ag-feats li:hover { border-color: rgba(255, 255, 255, .32); background: rgba(255, 255, 255, .08); }
+.ag-light .ag-feats li:hover { border-color: var(--ag-navy); background: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ag *, .ag-modal * { transition: none !important; animation: none !important; }
+  .ag-ring { opacity: .6; }
+}
