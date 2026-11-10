@@ -1,11 +1,12 @@
-/* 프레스·금형 예지보전 — 화면
+/* 프레스 예지보전 — 화면 (v2.1: 금형 타수 · 교체주기 · 오버홀 · 월별 타수 보고서 화면을 빼고 머신러닝 · 라벨링을 더함)
    계산은 js/logic.js(PressLogic), 그래프는 js/charts.js, 저장은 js/store.js, AI 연결은 js/ai-endpoint.js·ai-panel.js. */
 (function () {
   'use strict';
   var L = window.PressLogic, S = window.PressStore, C = window.PressCharts, AIP = window.AIPanel, P = window.PressSPC, RS = window.PressRaw;
   var D = window.PressPdM, LV = window.PressLive, VD = window.PressVirtual; // 3차 — 온도 3구간·리드타임 · 실시간 연결 · 가상 더미 데이터
+  var LB = window.PressLabel; // v2.1 — 머신러닝 · 라벨링
   var db = S.loadDb();
-  var ui = { press: '', month: '', pending: [], errors: [], progress: '', busy: false, spc: { press: '', die: -1, view: 'all', from: '', to: '', group: 0 }, live: { kind: '', press: '', winMin: 10 } };
+  var ui = { press: '', month: '', pending: [], errors: [], progress: '', busy: false, spc: { press: '', die: -1, view: 'all', from: '', to: '', group: 0 }, live: { kind: '', press: '', winMin: 10 }, ml: { press: '', day: '', edit: '', from: '', to: '', lab: 1, statPress: '', dropExclude: false } };
   var raw = {};       // 2초 센서 로그 — 프레스마다 시계열(IndexedDB 에 저장, js/rawstore.js)
   var rawInfo = {};   // 프레스마다 타수·정지 계산 캐시
   var rawSaved = null; // true 저장됨 · false 저장 안 됨(메모리만)
@@ -81,12 +82,6 @@
       h('div', { class: 'btn-row', style: 'justify-content:center' },
         h('a', { class: 'btn btn-primary', href: '#/import' }, '데이터 가져오기로'),
         h('button', { type: 'button', class: 'btn', onclick: askSample }, '샘플 90일로 시작')));
-  }
-  function lifeBar(ratio, warnPct, level) {
-    var w = ratio == null ? 0 : Math.max(0, Math.min(1, ratio)) * 100;
-    return h('div', { class: 'life', role: 'img', 'aria-label': '사용률 ' + L.pctText(ratio) },
-      h('div', { class: 'life-fill lv-' + level, style: 'width:' + w.toFixed(1) + '%' }),
-      warnPct ? h('div', { class: 'life-mark', style: 'left:' + (warnPct * 100) + '%', title: '주의 기준 ' + Math.round(warnPct * 100) + '%' }) : null);
   }
   function goPress(id) { ui.press = id; location.hash = '#/anomaly'; }
 
@@ -192,7 +187,7 @@
       ui.errors = [];
       save();
       toast((ok ? ok + '개 파일 반영 — 새 행 ' + total.added + ' · 바뀐 행 ' + total.updated : '') + (rawMsg ? (ok ? ' · ' : '') + rawMsg : '') +
-        (sm.added.presses || sm.added.dies ? ' · 기준표에 프레스 ' + sm.added.presses + '대·금형 ' + sm.added.dies + '개 추가(설정에서 수명·주기를 넣어 주세요)' : ''));
+        (sm.added.presses ? ' · 기준표에 프레스 ' + sm.added.presses + '대 추가' : ''));
       render();
     }
     if (!rawItems.length) { finish(''); return Promise.resolve(); }
@@ -358,7 +353,7 @@
     return f;
   }
 
-  /* 원 로그 → 하루 묶음(프레스·날짜·금형) — 기존 금형·오버홀·「최근 14일 vs 앞 42일」 판정이 이어서 씁니다 */
+  /* 원 로그 → 하루 묶음(프레스·날짜·금형) — 「최근 14일 vs 앞 42일」 이상 감지가 이어서 씁니다 */
   function rebuildDaily(presses) {
     presses.forEach(function (p) {
       db.records = db.records.filter(function (r) { return !(r.src === 'raw' && r.press === p); });
@@ -394,7 +389,7 @@
       var it = { fileName: '가상더미_프레스3대_2026-10-19~23 (2초)', result: { det: det, records: [], warnings: [] }, raw: true, sample: true, aoa: [VD.HEAD] };
       VD.build(function (row) { it.aoa.push(row); });
       clearRaw().then(function () {
-        db = L.emptyDb(); db.sample = true; db.sampleKind = 'virtual'; db.events = VD.events();
+        db = L.emptyDb(); db.sample = true; db.sampleKind = 'virtual'; db.events = VD.events(); db.ml = LB.cleanState({ logs: VD.mlog() });
         ui.pending = []; ui.press = ''; ui.month = ''; ui.spc = { press: '', die: -1, view: 'all', from: '', to: '', group: 0 }; zoneCache = {}; leadCache = null;
         return commit([it]);
       }).then(function () { location.hash = '#/lead'; });
@@ -454,7 +449,7 @@
     var out = [pageHead('데이터', '프레스 로그 가져오기', '설비 화면·PLC·수기 엑셀에서 꺼낸 로그를 넣어 주세요. 열 이름이 달라도 열 연결에서 맞출 수 있습니다.'),
       h('section', { class: 'card' }, h('h2', null, '1. 파일 넣기'), drop,
         h('div', { class: 'btn-row' },
-          h('button', { type: 'button', class: 'btn', onclick: askSample }, '샘플 90일로 시작'),
+          h('button', { type: 'button', class: 'btn', onclick: askSample }, '하루 묶음 샘플 90일로 시작'),
           h('button', { type: 'button', class: 'btn', onclick: askRawSample }, '2초 로그 샘플(4대 × 3일)'),
           h('button', { type: 'button', class: 'btn', onclick: askVirtual }, '가상 고장 데이터(3대 × 5일 + 이력)'),
           h('button', { type: 'button', class: 'btn', onclick: downloadVirtualCsv }, '가상 고장 데이터 CSV 내려받기(2초 로그 약 26MB)'),
@@ -468,7 +463,7 @@
           h('li', null, '타수는 「타수」 열이 있으면 그 값을, 없으면 같은 프레스의 「프레스 누적 타수」 차이를, 그것도 없으면 「금형 (누적) 타수」 차이를 씁니다. 「금형 타수」 열은 금형 교체 때 0 으로 돌아가는 누적 카운터로 읽습니다(받은 로그 확인).'),
           h('li', null, '같은 행(일자 + 시각 + 프레스 + 금형)을 다시 가져오면 새 값으로 바뀝니다. 같은 파일을 두 번 넣어도 두 번 세지 않습니다.'),
           h('li', null, 'CSV 는 UTF-8 과 한글 엑셀이 저장한 CP949(EUC-KR) 를 알아서 가려 읽습니다.'),
-          h('li', null, '「가상 고장 데이터」는 3차에 만든 가상 더미 값입니다(프레스 3대 × 10/19~23, 고장 3건·정비 3건·금형 교체 2건). 고장 전 이탈이 몇 시간·몇 타 먼저 나타나는지 「고장 전 이탈 맞춰 보기」에서 봅니다.'),
+          h('li', null, '「가상 고장 데이터」는 3차에 만든 가상 더미 값입니다(프레스 3대 × 10/19~23, 고장 3건·정비 3건·금형 교체 2건, 정비 · 고장 이력 3건). 고장 전 이탈이 몇 시간·몇 타 먼저 나타나는지 「고장 전 이탈」에서, 정상 / 이상 라벨은 「머신러닝 · 라벨링」에서 봅니다.'),
           h('li', null, '파일은 서버로 보내지 않고 이 브라우저 안에서만 읽습니다.')),
         h('p', { class: 'note progress', id: 'importProgress', 'aria-live': 'polite' }, ui.progress || ''),
         ui.errors.length ? h('details', { class: 'warn-list', open: true }, h('summary', null, '읽지 못했거나 건너뛴 파일 ' + ui.errors.length + '개'),
@@ -497,7 +492,7 @@
     var rawPs = Object.keys(raw).sort(L.natCmp);
     if (rawPs.length) out.push(h('section', { class: 'card' }, h('h2', null, '쌓인 2초 센서 로그'),
       table(['프레스', '종류', '기간', '행', '날 수', '금형'], rawPs.map(function (p) { var m = P.summary(raw[p]); return [p, m.type || '-', P.stampText(m.from) + ' ~ ' + P.stampText(m.to), N(m.n), m.days, m.dies.join(', ') || '-']; }), { num: [0, 0, 0, 1, 1, 0] }),
-      h('p', { class: 'note' }, rawSaved === false ? '이 브라우저 저장소(IndexedDB)가 막혀 이번 창에만 있습니다. 창을 닫으면 사라집니다.' : '이 브라우저(IndexedDB)에 저장됩니다. 하루 묶음(타수·가동 시간·센서 평균)은 아래 「쌓인 데이터」로 이어져 금형·오버홀·일 단위 이상 감지에 쓰입니다.'),
+      h('p', { class: 'note' }, rawSaved === false ? '이 브라우저 저장소(IndexedDB)가 막혀 이번 창에만 있습니다. 창을 닫으면 사라집니다.' : '이 브라우저(IndexedDB)에 저장됩니다. 하루 묶음(타수·가동 시간·센서 평균)은 아래 「쌓인 데이터」로 이어져 일 단위 이상 감지에 쓰입니다. 「머신러닝 · 라벨링」은 이 2초 로그에 라벨을 붙입니다.'),
       ui.rawWarnings && ui.rawWarnings.length ? h('details', { class: 'warn-list' }, h('summary', null, '마지막으로 읽은 파일의 행 점검 알림(앞 50건)'),
         h('ul', null, ui.rawWarnings.map(function (w) { return h('li', null, (w.row ? w.row + '행: ' : '') + w.msg); }))) : null,
       (db.rawFiles || []).length ? h('details', null, h('summary', null, '가져온 2초 로그 파일 ' + db.rawFiles.length + '개'),
@@ -513,7 +508,6 @@
         h('div', { class: 'tiles' },
           tile('기간', A.range.first.slice(5).replace('-', '/') + ' ~ ' + A.range.last.slice(5).replace('-', '/'), (L.daysBetween(A.range.first, A.range.last) + 1) + '일'),
           tile('프레스', presses.length + '대'),
-          tile('금형', Object.keys(db.dies).length + '개'),
           tile('로그 행', N(db.records.length))),
         h('p', { class: 'note' }, '타수 계산: 타수 열 ' + N(st.fromRow) + '행 · 프레스 누적 타수 차이 ' + N(st.fromPressCum) + '행 · 금형 누적 타수 차이 ' + N(st.fromDieCum) + '행' +
           (st.noPrev ? ' · 앞 누적값이 없어 못 센 첫 행 ' + st.noPrev + '행' : '') + (st.reset ? ' · 누적값이 줄어(카운터 초기화) 못 센 행 ' + st.reset + '행' : '') + (st.none ? ' · 타수 정보가 없는 행 ' + N(st.none) + '행' : '')),
@@ -577,43 +571,29 @@
 
   /* ── 대시보드 ───────────────────────────── */
   function pageDash() {
-    if (!db.records.length) return [pageHead('대시보드', '프레스·금형 예지보전'), emptyNotice()];
-    var st = A.statuses, R = A.rules;
+    if (!db.records.length) return [pageHead('대시보드', '프레스 예지보전 — 전압 · 전류 · 진동 · 온도'), emptyNotice()];
+    var st = A.statuses;
     var cnt = { bad: 0, warn: 0, ok: 0, none: 0 };
     st.forEach(function (s) { cnt[s.level] = (cnt[s.level] || 0) + 1; });
-    var week = st.reduce(function (s, x) { return s + x.strokes7; }, 0);
+    var chBad = A.anomalies.filter(function (a) { return a.level === 'bad' || a.level === 'warn'; }).length;
     var hero = h('div', { class: 'hero' },
-      h('div', { class: 'hero-text' }, h('h1', null, '프레스·금형 예지보전 대시보드'),
-        h('p', null, '기준일 ' + A.asOf + ' (로그 마지막 날) · 로그 ' + A.range.first + ' ~ ' + A.range.last + ' · 프레스 ' + st.length + '대 · 금형 ' + A.dies.length + '개')));
+      h('div', { class: 'hero-text' }, h('h1', null, '프레스 예지보전 대시보드'),
+        h('p', null, '전압 · 전류 · 진동 · 온도로 정상 / 이상 상태를 봅니다 · 기준일 ' + A.asOf + ' (로그 마지막 날) · 로그 ' + A.range.first + ' ~ ' + A.range.last + ' · 프레스 ' + st.length + '대')));
     var kpis = h('div', { class: 'dkpis' },
-      dk('점검 필요', cnt.bad, '대', 'lv-bad', '이상 감지 연속·오버홀 지남·금형 수명 초과'),
-      dk('주의', cnt.warn, '대', 'lv-warn', '한계 근접·예정일 ' + R.alertDays + '일 안'),
-      dk('정상', cnt.ok, '대', 'lv-ok', cnt.none ? '판정 기준 없음 ' + cnt.none + '대' : '기준 안쪽'),
-      dk('최근 7일 타수', N(week), '타', 'lv-info', A.asOf.slice(5).replace('-', '/') + '까지 7일'));
+      dk('점검 필요', cnt.bad, '대', 'lv-bad', '센서 값이 관리한계 밖으로 이어짐'),
+      dk('주의', cnt.warn, '대', 'lv-warn', '주의 한계 밖 · 관리한계 밖 며칠'),
+      dk('정상', cnt.ok, '대', 'lv-ok', cnt.none ? '비교 못 함 ' + cnt.none + '대' : '평소 범위 안'),
+      dk('이상 채널', chBad, '개', 'lv-info', '프레스 × 채널(전압 · 전류 · 진동 · 온도)'));
     var cards = h('div', { class: 'press-grid' }, st.map(pressCard));
-    var dies = A.dies.slice().sort(function (a, b) { return (b.ratio == null ? -1 : b.ratio) - (a.ratio == null ? -1 : a.ratio); });
-    var dieBox = h('section', { class: 'dp' }, h('div', { class: 'dp-head' }, h('h2', null, '금형 수명 사용률'), h('a', { class: 'dp-more', href: '#/die' }, '금형 화면')),
-      h('p', { class: 'dp-sub' }, '사용 타수 ÷ 수명 기준 타수. 세로 눈금 = 주의 기준 ' + Math.round(R.warnPct * 100) + '%'),
-      h('ul', { class: 'lifelist' }, dies.slice(0, 10).map(function (d) {
-        return h('li', null,
-          h('div', { class: 'life-top' }, h('strong', null, d.id), h('span', { class: 'note' }, d.presses.join('·')), pill(d.level),
-            h('span', { class: 'life-pct' }, d.ratio == null ? '기준 없음' : L.pctText(d.ratio))),
-          lifeBar(d.ratio, R.warnPct, d.level),
-          h('div', { class: 'note' }, d.life ? N(d.used) + ' / ' + N(d.life) + '타' + (d.dueDate ? ' · 교체 예정 ' + d.dueDate : '') : '수명 기준 타수를 설정에서 넣어 주세요'));
-      })), dies.length > 10 ? h('p', { class: 'note' }, '사용률 상위 10개만 보입니다. 전체는 금형 화면에서.') : null);
-    var sched = schedule(45);
-    var schedBox = h('section', { class: 'dp' }, h('div', { class: 'dp-head' }, h('h2', null, '다가오는 정비 일정'), h('a', { class: 'dp-more', href: '#/overhaul' }, '오버홀 화면')),
-      h('p', { class: 'dp-sub' }, '지난 것과 기준일부터 45일 안 · 예정일은 최근 ' + R.avgDays + '일 일평균 타수로 추정'),
-      sched.length ? table(['예정일', '구분', '대상', '상태'], sched.map(function (x) {
-        return { cells: [x.date + (x.date < A.asOf ? ' (지남)' : x.date === A.asOf ? ' (오늘)' : ' (' + L.daysBetween(A.asOf, x.date) + '일 뒤)'), x.kind, x.target, pill(x.level)] };
-      }), { cls: 'dash-table' }) : h('p', { class: 'note' }, '45일 안에 예정된 금형 교체·오버홀이 없습니다.'));
-    return [hero, kpis, rawDash(), h('h2', { class: 'sec' }, '프레스별 상태 (하루 묶음 기준)'), cards, h('div', { class: 'grid-2' }, dieBox, schedBox)];
+    var mlBox = h('section', { class: 'dp' }, h('div', { class: 'dp-head' }, h('h2', null, '머신러닝 · 라벨링'), h('a', { class: 'dp-more', href: '#/ml' }, '라벨링 화면')),
+      h('p', { class: 'dp-sub' }, '정비 · 고장 이력 ' + db.ml.logs.length + '건 · 수동 라벨 ' + db.ml.manual.length + '건 · 고장 전 구간 ' + db.ml.rule.preH + '시간 · 안정 구간 ' + db.ml.rule.postH + '시간'),
+      h('p', { class: 'note' }, db.ml.logs.length ? '이력으로 2초 센서 로그에 정상 · 이상 · 제외 라벨을 붙여 학습용 데이터셋으로 내려받습니다.' : '정비 · 고장 이력(엑셀 · CSV)을 넣으면 2초 센서 로그에 정상 / 이상 라벨을 붙입니다.'));
+    return [hero, kpis, rawDash(), h('h2', { class: 'sec' }, '프레스별 상태 (하루 묶음 기준)'), cards, mlBox];
   }
   function dk(t, v, unit, cls, note) {
     return h('div', { class: 'dk ' + cls }, h('div', { class: 'dk-body' }, h('div', { class: 'dk-t' }, t), h('div', { class: 'dk-v' }, String(v), h('small', null, unit)), h('div', { class: 'dk-note' }, note)));
   }
   function pressCard(s) {
-    var last = s.lastDay || {};
     var sensors = s.sensors.filter(function (a) { return a.base; }).map(function (a) {
       return h('li', null, h('span', { class: 'k' }, a.label), h('span', { class: 'v' }, a.recent.median == null ? '-' : N(a.recent.median, 1) + a.unit),
         h('span', { class: 'note' }, '평소 ' + N(a.base.center, 1) + a.unit), a.level === 'ok' ? null : pill(a.level));
@@ -621,22 +601,12 @@
     return h('article', { class: 'pcard lv-' + s.level },
       h('div', { class: 'pcard-top' }, h('div', null, h('h3', null, s.id), h('div', { class: 'note' }, s.type || '종류 미입력')), pill(s.level)),
       s.reasons.length ? h('ul', { class: 'reasons' }, s.reasons.slice(0, 3).map(function (r) { return h('li', { class: 'lv-' + r.level, title: r.text }, r.short || r.text); }))
-        : h('p', { class: 'note' }, s.level === 'none' ? '판정 기준이 없습니다(설정에서 오버홀 주기·금형 수명을 넣어 주세요).' : '기준 안쪽입니다.'),
+        : h('p', { class: 'note' }, s.level === 'none' ? '센서 값이 없거나 기준선이 짧아 비교하지 못했습니다.' : '평소 범위 안입니다.'),
       s.reasons.length > 3 ? h('p', { class: 'note' }, '외 ' + (s.reasons.length - 3) + '건') : null,
       h('dl', { class: 'pstats' },
-        h('dt', null, '최근 7일 타수'), h('dd', null, N(s.strokes7)),
-        h('dt', null, '마지막 기록'), h('dd', null, s.lastDate + (last.strokes != null ? ' · ' + N(last.strokes) + '타' : '')),
-        h('dt', null, '최근 금형'), h('dd', null, s.dies.join(', ') || '-'),
-        h('dt', null, '오버홀 예정'), h('dd', null, s.overhaul && s.overhaul.dueDate ? s.overhaul.dueDate : '-')),
+        h('dt', null, '마지막 기록'), h('dd', null, s.lastDate || '-')),
       sensors.length ? h('ul', { class: 'sens' }, sensors) : null,
       h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn btn-sm', onclick: function () { goPress(s.id); } }, '이상 감지 그래프')));
-  }
-  /* 정비 일정 — 금형 교체·오버홀 예정일, 지난 것 포함 */
-  function schedule(days) {
-    var until = L.addDays(A.asOf, days), out = [];
-    A.dies.forEach(function (d) { if (d.dueDate && d.dueDate <= until) out.push({ date: d.dueDate, kind: '금형 교체', target: d.id + (d.presses.length ? ' (' + d.presses.join('·') + ')' : ''), level: d.level }); });
-    A.overhauls.forEach(function (o) { if (o.dueDate && o.dueDate <= until) out.push({ date: o.dueDate, kind: '오버홀', target: o.id + (o.type ? ' · ' + o.type : ''), level: o.level }); });
-    return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
   }
 
 
@@ -1251,104 +1221,10 @@
       h('div', { id: 'liveBody' })];
   }
 
-  /* ── ① 금형 타수·교체 ───────────────────── */
-  function pageDie() {
-    if (!db.records.length) return [pageHead('①', '금형 타수 · 교체 주기'), emptyNotice()];
-    var R = A.rules;
-    var months = L.monthsOf(A.rows);
-    var dieMonth = {};
-    A.rows.forEach(function (r) { if (!r.die || r.s == null) return; var m = L.monthOf(r.date); (dieMonth[r.die] = dieMonth[r.die] || {})[m] = (dieMonth[r.die][m] || 0) + r.s; });
-    var lifeRows = A.dies.map(function (d) {
-      return { cls: d.level === 'bad' ? 'row-bad' : d.level === 'warn' ? 'row-warn' : null, cells: [h('strong', null, d.id), d.presses.join(', ') || '-', d.life ? N(d.life) : '-', d.startDate || '-',
-        d.baseStrokes ? N(d.baseStrokes) : '0', N(d.logged), N(d.used),
-        h('div', { class: 'cellbar' }, lifeBar(d.ratio, R.warnPct, d.level), h('span', null, d.ratio == null ? '-' : L.pctText(d.ratio))),
-        N(d.avgPerDay), d.remain == null ? '-' : N(d.remain), d.dueDate ? d.dueDate + (d.daysLeft != null ? ' (' + d.daysLeft + '일)' : '') : '-', pill(d.level), replaceBtn(d.id)] };
-    });
-    var monthRows = A.dies.map(function (d) {
-      var m = dieMonth[d.id] || {}, tot = 0;
-      return [d.id].concat(months.map(function (x) { tot += m[x] || 0; return m[x] ? N(m[x]) : '-'; })).concat([N(tot)]);
-    });
-    return [
-      pageHead('①', '금형 타수 · 교체 주기', '금형마다 사용 타수를 세고, 최근 ' + R.avgDays + '일 일평균 타수로 수명 기준 타수에 닿는 날을 추정합니다.',
-        h('button', { type: 'button', class: 'btn', onclick: exportDies }, '엑셀로 내려받기')),
-      h('div', { class: 'tiles' },
-        tile('금형', A.dies.length + '개'),
-        tile('점검 필요', A.dies.filter(function (d) { return d.level === 'bad'; }).length + '개', '수명 기준 도달'),
-        tile('주의', A.dies.filter(function (d) { return d.level === 'warn'; }).length + '개', Math.round(R.warnPct * 100) + '% 이상 또는 ' + R.alertDays + '일 안'),
-        tile('수명 기준 없음', A.dies.filter(function (d) { return !d.life; }).length + '개', '설정에서 입력')),
-      h('section', { class: 'card' }, h('h2', null, '금형 수명 · 교체 예정 (기준일 ' + A.asOf + ')'),
-        table(['금형', '쓴 프레스', '수명 기준 타수', '사용 시작일', '시작 시점 사용', '로그에서 센 타수', '사용 타수', '사용률', '일평균(최근 ' + R.avgDays + '일)', '남은 타수', '교체 예정일', '상태', '교체 기록'],
-          lifeRows, { num: [0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0], cls: 'dies' }),
-        h('ul', { class: 'note' },
-          h('li', null, '사용 타수 = 시작 시점 사용 타수 + 사용 시작일(교체일)부터 로그에서 센 타수. 수명 기준·시작일은 설정의 금형 기준표에서 고칩니다.'),
-          h('li', null, '일평균은 쉬는 날을 포함한 달력 일수로 나눕니다(실제 쓰는 빈도 그대로 반영). 최근에 쓰지 않은 금형은 예정일을 내지 않습니다.'),
-          h('li', null, '「교체 기록」은 교체·재연마한 날을 사용 시작일로 하고 시작 시점 사용 타수를 0 으로 되돌립니다.'))),
-      h('section', { class: 'card' }, h('h2', null, '금형별 월 타수 집계'),
-        table(['금형'].concat(months.map(L.monthLabel)).concat(['합계']), monthRows, { num: [0].concat(months.map(function () { return 1; })).concat([1]) }),
-        h('p', { class: 'note' }, '로그 기간의 타수만 셉니다(시작 시점 사용 타수는 들어가지 않음).'))
-    ];
-  }
-  function replaceBtn(id) {
-    var inp = h('input', { type: 'date', value: A.asOf, 'aria-label': id + ' 교체일' });
-    return h('span', { class: 'inline-act' }, inp, h('button', { type: 'button', class: 'btn btn-sm', onclick: function () {
-      if (!inp.value) return;
-      if (!confirm(id + ' 을(를) ' + inp.value + ' 에 교체·재연마한 것으로 기록할까요? 사용 시작일이 이 날로 바뀌고 시작 시점 사용 타수는 0 이 됩니다.')) return;
-      var d = L.cleanDie(db.dies[id], id); d.startDate = inp.value; d.baseStrokes = 0; db.dies[id] = d; save(); toast(id + ' 교체를 기록했습니다.'); render();
-    } }, '기록'));
-  }
-  function exportDies() {
-    var wb = XLSX.utils.book_new();
-    var a = [['금형', '쓴 프레스', '수명 기준 타수', '사용 시작일', '시작 시점 사용 타수', '로그에서 센 타수', '사용 타수', '사용률(%)', '일평균 타수', '남은 타수', '교체 예정일', '상태', '설명']];
-    A.dies.forEach(function (d) { a.push([d.id, d.presses.join(', '), d.life, d.startDate, d.baseStrokes || 0, d.logged, d.used, d.ratio == null ? null : L.round(d.ratio * 100, 1), d.avgPerDay, d.remain, d.dueDate, L.LEVELS[d.level], d.reason]); });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), '금형 수명');
-    var months = L.monthsOf(A.rows), b = [['금형'].concat(months.map(L.monthLabel)).concat(['합계'])];
-    A.dies.forEach(function (d) {
-      var tot = 0, row = [d.id];
-      months.forEach(function (m) { var s = 0; A.rows.forEach(function (r) { if (r.die === d.id && r.s != null && L.monthOf(r.date) === m) s += r.s; }); tot += s; row.push(s); });
-      row.push(tot); b.push(row);
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b), '금형별 월 타수');
-    XLSX.writeFile(wb, '금형_타수_' + A.asOf + '.xlsx');
-  }
-
-  /* ── ② 오버홀 ───────────────────────────── */
-  function pageOverhaul() {
-    if (!db.records.length) return [pageHead('②', '오버홀 알림'), emptyNotice()];
-    var R = A.rules;
-    var rows = A.overhauls.map(function (o) {
-      return { cls: o.level === 'bad' ? 'row-bad' : o.level === 'warn' ? 'row-warn' : null, cells: [h('strong', null, o.id), o.type || '-', o.lastOH || '-',
-        o.ohStrokes ? N(o.ohStrokes) : '-', o.ohDays ? o.ohDays + '일' : '-', N(o.strokesSince), o.daysSince == null ? '-' : o.daysSince + '일',
-        h('div', { class: 'cellbar' }, lifeBar(o.ratio, R.warnPct, o.level), h('span', null, o.ratio == null ? '-' : L.pctText(o.ratio) + (o.basis ? '(' + o.basis + ')' : ''))),
-        o.dueDate ? o.dueDate + (o.overdueDays ? ' (' + o.overdueDays + '일 지남)' : o.daysLeft != null ? ' (' + o.daysLeft + '일)' : '') : '-', pill(o.level), ohBtn(o.id)] };
-    });
-    return [
-      pageHead('②', '오버홀 알림', '프레스마다 마지막 오버홀부터 친 타수와 지난 날수를 오버홀 주기(타수·일수)와 견줍니다. 둘 다 있으면 먼저 닿는 쪽을 따릅니다.'),
-      h('div', { class: 'tiles' },
-        tile('프레스', A.overhauls.length + '대'),
-        tile('점검 필요', A.overhauls.filter(function (o) { return o.level === 'bad'; }).length + '대', '주기 지남'),
-        tile('주의', A.overhauls.filter(function (o) { return o.level === 'warn'; }).length + '대', Math.round(R.warnPct * 100) + '% 이상 또는 ' + R.alertDays + '일 안'),
-        tile('주기 없음', A.overhauls.filter(function (o) { return o.level === 'none'; }).length + '대', '설정에서 입력')),
-      h('section', { class: 'card' }, h('h2', null, '오버홀 현황 (기준일 ' + A.asOf + ')'),
-        table(['프레스', '종류', '마지막 오버홀', '주기(타수)', '주기(일수)', '그 뒤 타수', '그 뒤 날수', '사용률', '예정일', '상태', '완료 기록'], rows, { num: [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0] }),
-        h('ul', { class: 'note' },
-          h('li', null, '그 뒤 타수 = 「마지막 오버홀 뒤 로그 이전 타수」(로그가 시작되기 전에 친 타수, 설정) + 마지막 오버홀 다음 날부터 로그에서 센 타수.'),
-          h('li', null, '타수 기준 예정일은 최근 ' + R.avgDays + '일 일평균 타수로 추정합니다. 일수 기준은 마지막 오버홀 일자 + 주기입니다.'),
-          h('li', null, '「완료 기록」은 마지막 오버홀 일자를 그 날로 바꾸고 로그 이전 타수를 0 으로 되돌립니다.')))
-    ];
-  }
-  function ohBtn(id) {
-    var inp = h('input', { type: 'date', value: A.asOf, 'aria-label': id + ' 오버홀 완료일' });
-    return h('span', { class: 'inline-act' }, inp, h('button', { type: 'button', class: 'btn btn-sm', onclick: function () {
-      if (!inp.value) return;
-      if (!confirm(id + ' 오버홀을 ' + inp.value + ' 에 마친 것으로 기록할까요?')) return;
-      var p = L.cleanPress(db.presses[id], id); p.lastOH = inp.value; p.ohBase = 0; db.presses[id] = p; save(); toast(id + ' 오버홀 완료를 기록했습니다.'); render();
-    } }, '기록'));
-  }
-
   /* ── ③ 이상 감지 ─────────────────────────── */
   var CH_COLOR = { current: 'var(--series-1)', temp: 'var(--series-2)', vib: 'var(--series-3)', voltage: 'var(--series-4)' };
   function pageAnomaly() {
-    if (!db.records.length) return [pageHead('③', '이상 감지'), emptyNotice()];
+    if (!db.records.length) return [pageHead('①', '이상 감지'), emptyNotice()];
     var R = A.rules;
     var presses = A.statuses.map(function (s) { return s.id; });
     if (!ui.press || presses.indexOf(ui.press) < 0) {
@@ -1376,7 +1252,7 @@
         C.sensorFigure(a.label + ' 하루 평균 — ' + ui.press, { points: a.points, base: a.base, recentFrom: a.recent.from, unit: a.unit, k: R.k, kWarn: R.kWarn, color: CH_COLOR[a.channel] }));
     });
     return [
-      pageHead('③', '이상 감지 (통계 기준)', '평소(기준선)보다 벗어난 날이 이어지는지를 봅니다. 고장 기록으로 배운 예측이 아니라 「평소와 다름」을 알리는 1단계입니다.'),
+      pageHead('①', '이상 감지 (통계 기준)', '평소(기준선)보다 벗어난 날이 이어지는지를 봅니다. 고장 기록으로 배운 예측이 아니라 「평소와 다름」을 알리는 1단계입니다.'),
       h('section', { class: 'card filters' }, fld('프레스', sel),
         h('p', { class: 'note span-all' }, ruleText(R) + ' · ', h('a', { href: '#/settings' }, '기준 바꾸기'))),
       h('section', { class: 'card' }, h('h2', null, '전체 한눈 보기 (기준일 ' + A.asOf + ')'), matrix),
@@ -1387,85 +1263,281 @@
           h('li', null, '기준선 = 최근 구간 바로 앞 ' + R.baseDays + '일의 ' + (R.method === 'mad' ? '중앙값, 흩어짐 = 1.4826 × MAD(중앙값과의 차이의 중앙값). 튀는 값 몇 개에 흔들리지 않습니다.' : '평균, 흩어짐 = 표준편차.')),
           h('li', null, '관리한계 = 기준선 ± ' + R.k + 'σ, 주의 한계 = ± ' + R.kWarn + 'σ. 그래프의 빨간 점은 관리한계 밖, 주황 점은 주의 한계 밖입니다.'),
           h('li', null, '하루 튄 값만으로는 판정하지 않습니다(지속 조건). 전류와 온도가 함께 오르는 것처럼 여러 채널이 같이 움직이면 더 눈여겨봅니다.'),
-          h('li', null, '2단계에서 고장·교체 이력을 받으면 「어떤 모양이 고장 전에 나왔는가」를 배워 기준을 맞춥니다.')))
+          h('li', null, '정비 · 고장 이력으로 라벨을 붙이고 「어떤 모양이 고장 전에 나왔는가」를 배우는 일은 「머신러닝 · 라벨링」에서 합니다.')))
     ];
   }
   function ruleText(R) { return L.ruleText(R); }
 
-  /* ── ④ 월별 타수 보고서 ──────────────────── */
-  function pageReport() {
-    if (!db.records.length) return [pageHead('④', '월별 프레스 종류별 타수 보고서'), emptyNotice()];
-    var mb = L.monthlyByType(A.rows, db.presses);
-    if (!ui.month || mb.months.indexOf(ui.month) < 0) ui.month = mb.months[mb.months.length - 1];
-    var sel = h('select', { 'aria-label': '월' });
-    mb.months.slice().reverse().forEach(function (m) { var o = h('option', { value: m }, L.monthLabel(m)); if (m === ui.month) o.selected = true; sel.appendChild(o); });
-    sel.addEventListener('change', function () { ui.month = sel.value; render(); });
-    var det = L.monthDetail(A.rows, db.presses, ui.month);
-    var partial = ui.month === L.monthOf(A.range.first) && A.range.first.slice(8) !== '01' || ui.month === L.monthOf(A.range.last);
-    var colors = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)'];
-    var fig = C.figure('월별 프레스 종류별 타수', { labels: mb.months.map(function (m) { return (+m.slice(5)) + '월'; }), type: 'bar',
-      series: mb.types.map(function (t, i) { return { name: t.type, color: colors[i % colors.length], values: t.months.map(function (c) { return c.strokes; }) }; }) });
-    var ai = (db.aiNotes || {})[A.asOf];
-    var alerts = A.statuses.filter(function (s) { return s.level === 'bad' || s.level === 'warn'; });
-    var paper = h('section', { class: 'card paper rp', id: 'reportPaper' },
-      h('h1', null, '프레스 타수 월간 보고 — ' + L.monthLabel(ui.month)),
-      h('p', { class: 'note' }, '로그 기간 ' + A.range.first + ' ~ ' + A.range.last + ' · 작성 기준일 ' + A.asOf + (partial ? ' · 이 달은 로그가 한 달 전부가 아닙니다' : '')),
-      h('h2', null, '1. 프레스 종류별 타수'),
-      table(['프레스 종류', '타수', '가동 시간(h)', '프레스·가동일', '프레스'], det.byType.map(function (g) { return [g.key, N(g.strokes), N(g.runHr, 1), g.days, g.presses.join(', ')]; })
-        .concat([{ cls: 'sum', cells: ['합계', N(det.total), N(det.byType.reduce(function (s, g) { return s + g.runHr; }, 0), 1), '', ''] }]), { num: [0, 1, 1, 1, 0] }),
-      h('h2', null, '2. 프레스별'),
-      table(['프레스', '종류', '타수', '가동일', '일평균 타수', '가동 시간(h)', '시간당 타수'], det.byPress.map(function (g) {
-        return [g.key, g.extra, N(g.strokes), g.days, N(g.perDay), N(g.runHr, 1), g.perHr == null ? '-' : N(g.perHr, 1)];
-      }), { num: [0, 0, 1, 1, 1, 1, 1] }),
-      h('h2', null, '3. 금형별'),
-      table(['금형', '쓴 프레스', '타수', '사용일', '일평균 타수'], det.byDie.map(function (g) { return [g.key, g.presses.join(', '), N(g.strokes), g.days, N(g.perDay)]; }), { num: [0, 0, 1, 1, 1] }),
-      h('h2', null, '4. 월별 추이 (프레스 종류별 타수)'),
-      fig,
-      table(L.monthlyToAoa(mb)[0], L.monthlyToAoa(mb).slice(1).map(function (r, i, all) { return { cls: i === all.length - 1 ? 'sum' : null, cells: r.map(function (v, j) { return j ? N(v) : v; }) }; }),
-        { num: [0].concat(mb.months.map(function () { return 1; })).concat([1]) }),
-      h('h2', null, '5. 현재 알림 (기준일 ' + A.asOf + ')'),
-      alerts.length ? h('ul', null, alerts.map(function (s) {
-        return h('li', null, h('strong', null, s.id + ' [' + L.LEVELS[s.level] + '] '), s.reasons.map(function (r) { return r.short || r.text; }).join(' / '));
-      })) : h('p', null, '점검 필요·주의 프레스가 없습니다.'),
-      ai ? [h('h2', null, '6. AI 분석 의견 (검토 후 사용)'), h('div', { class: 'pre' }, ai)] : null);
-    return [
-      pageHead('④', '월별 프레스 종류별 타수 보고서', '달을 고르면 종류별·프레스별·금형별 타수를 모읍니다. 엑셀로 받거나 인쇄(PDF 저장)할 수 있습니다.'),
-      h('section', { class: 'card filters no-print' }, fld('보고 월', sel),
-        h('div', { class: 'btn-row span-all' },
-          h('button', { type: 'button', class: 'btn btn-primary', onclick: function () { exportReport(mb, det); } }, '엑셀 내려받기'),
-          h('button', { type: 'button', class: 'btn', onclick: function () { window.print(); } }, '인쇄 · PDF'))),
-      h('div', { class: 'tiles no-print' },
-        tile(L.monthLabel(ui.month) + ' 타수', N(det.total)),
-        tile('가동 프레스', det.byPress.length + '대'),
-        tile('쓴 금형', det.byDie.length + '개'),
-        tile('프레스 종류', det.byType.length + '가지')),
-      paper
-    ];
+  /* ── ② 머신러닝 · 라벨링 (v2.1, 2026-11-10 요청) ─────────────
+     정비 · 고장 이력(maintenance_log)으로 2초 센서 로그에 정상 · 이상 · 제외 라벨을 붙이고, 사람이 구간을 골라 고치고,
+     라벨 분포 · 특징 요약 · 기준선 모델(z 점수) 혼동행렬을 보고, 학습용 CSV 로 내려받습니다. 계산은 js/label.js(PressLabel). */
+  var mlCache = null;
+  function mlList() {
+    var ps = Object.keys(raw).sort(L.natCmp), gap = P.cleanOpts(db.spc).gapSec;
+    var key = JSON.stringify([db.ml.logs, db.ml.rule, db.ml.manual, gap]) + '|' + ps.map(function (p) { return p + ':' + raw[p].n + ':' + raw[p].t[raw[p].n - 1]; }).join(',');
+    if (mlCache && mlCache.key === key) return mlCache;
+    mlCache = { key: key, models: {}, list: ps.map(function (p) {
+      var s = raw[p], res = LB.labelSeries(s, db.ml.logs, db.ml.rule, db.ml.manual);
+      return { s: s, res: res, segs: LB.segments(s, res, gap), counts: LB.counts(res) };
+    }) };
+    return mlCache;
   }
-  function exportReport(mb, det) {
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(L.monthlyToAoa(mb)), '월별 종류별 타수');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(L.monthDetailToAoa(det)), L.monthLabel(det.month).replace(/\s/g, ''));
-    var al = [['프레스', '종류', '상태', '근거']];
-    A.statuses.forEach(function (s) { al.push([s.id, s.type, L.LEVELS[s.level], s.reasons.map(function (r) { return '[' + L.LEVELS[r.level] + '] ' + r.text; }).join(' / ')]); });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(al), '현재 알림');
-    XLSX.writeFile(wb, '프레스_월간타수_' + det.month + '.xlsx');
+  function mlModel(mc) {
+    var M = db.ml.model, k = M.binSec + '|' + M.k;
+    if (!mc.models[k]) mc.models[k] = LB.zModel(mc.list, M);
+    return mc.models[k];
+  }
+  function labPill(lab, src) {
+    return h('span', null, h('span', { class: 'pill lab-' + lab }, LB.LABELS[lab].label), src === LB.SRC_MANUAL ? h('span', { class: 'pill src-manual tiny' }, '수동') : null);
+  }
+  function pctOf(a, b) { return b ? L.pctText(a / b) : '-'; }
+  function daysOf(s) {
+    if (!s || !s.n) return [];
+    var out = [], d = P.dateOf(s.t[0]), last = P.dateOf(s.t[s.n - 1]);
+    while (d <= last) { var a = P.parseStamp(d + ' 00:00:00'), r = P.rangeIdx(s, a, a + 86399); if (r[1] > r[0]) out.push(d); d = L.addDays(d, 1); }
+    return out;
+  }
+  function readLogFile(f) {
+    return f.arrayBuffer().then(function (buf) {
+      var u8 = new Uint8Array(buf), wb = /\.(csv|txt)$/i.test(f.name) ? XLSX.read(L.decodeCsv(u8).text, { type: 'string', raw: true }) : XLSX.read(u8, { type: 'array', cellDates: false });
+      var r = { logs: [], skipped: 0, error: '' };
+      wb.SheetNames.some(function (sn) {
+        var x = LB.logsFromAoa(XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null }));
+        if (!x.error) { r = x; return true; }
+        r.error = x.error; return false;
+      });
+      return r;
+    });
+  }
+  function mlSetLogs(list, msg) { db.ml.logs = LB.fillIds(list.map(function (l) { return Object.assign({}, l); })); mlCache = null; save(); if (msg) toast(msg); render(); }
+
+  function mlLogCard(ps) {
+    var logs = db.ml.logs, ed = ui.ml.edit ? logs.filter(function (l) { return l.log_id === ui.ml.edit; })[0] : null;
+    var keys = {}; ps.forEach(function (p) { keys[LB.eqKey(p)] = 1; });
+    var F = {};
+    LB.MLOG_FIELDS.forEach(function (f) {
+      var dt = f.id === 'found_at' || f.id === 'fixed_at', v = ed ? ed[f.id] : '';
+      F[f.id] = h('input', dt ? { type: 'datetime-local', step: 1, value: v ? String(v).replace(' ', 'T') : '', 'aria-label': f.ko }
+        : { type: 'text', value: v || '', list: f.id === 'equipment_id' ? 'mlPressList' : null, placeholder: f.id === 'log_id' ? '비우면 자동(M-0001)' : f.id === 'equipment_id' ? (ps[0] || 'P1') : '', 'aria-label': f.ko });
+    });
+    var dl = h('datalist', { id: 'mlPressList' }, ps.concat(Object.keys(db.presses)).filter(function (x, i, a) { return a.indexOf(x) === i; }).map(function (p) { return h('option', { value: p }); }));
+    var file = h('input', { type: 'file', accept: '.xlsx,.xls,.csv,.txt' });
+    file.addEventListener('change', function () {
+      var f = file.files[0]; if (!f) return;
+      readLogFile(f).then(function (r) {
+        if (!r.logs.length) { toast(r.error || '읽은 이력이 없습니다.', true); return; }
+        var before = logs.length, merged = LB.mergeLogs(logs, LB.fillIds(r.logs.slice()));
+        mlSetLogs(merged, '이력 ' + r.logs.length + '건을 읽었습니다(새로 ' + (merged.length - before) + '건 · 같은 정비 번호는 새 값으로)' + (r.skipped ? ' · 설비나 발견 일시가 없어 건너뛴 행 ' + r.skipped : '') + '.');
+      }).catch(function (e) { toast('읽지 못했습니다: ' + e.message, true); });
+      file.value = '';
+    });
+    var evFails = (db.events || []).filter(function (e) { return e.kind === '고장'; });
+    var rows = logs.map(function (l) {
+      var has = !!keys[LB.eqKey(l.equipment_id)];
+      return { cls: l.log_id === ui.ml.edit ? 'row-warn' : null, cells: [h('strong', null, l.log_id), l.equipment_id, l.found_at, l.fixed_at + (l.noFix ? ' (조치 일시 없음)' : ''), l.symptom || '-', l.failure_part || '-', l.cause || '-', l.action || '-',
+        h('span', null, has ? '있음' : h('span', { class: 'pill lv-warn tiny' }, '설비 이름 확인'), l.virtual ? h('span', { class: 'pill lv-none tiny' }, '가상') : null),
+        h('span', { class: 'btn-row' },
+          h('button', { type: 'button', class: 'btn btn-sm', onclick: function () { ui.ml.edit = l.log_id; render(); var c = document.getElementById('mlLogForm'); if (c) c.scrollIntoView({ block: 'center' }); } }, '고치기'),
+          h('button', { type: 'button', class: 'btn btn-sm btn-danger', 'aria-label': l.log_id + ' 빼기', onclick: function () { if (!confirm(l.log_id + ' 이력을 뺄까요?')) return; if (ui.ml.edit === l.log_id) ui.ml.edit = ''; mlSetLogs(logs.filter(function (x) { return x !== l; })); } }, '빼기'))] };
+    });
+    return h('section', { class: 'card', id: 'mlLogs' }, h('h2', null, '1. 정비 · 고장 이력 (maintenance_log · ' + logs.length + '건)'),
+      h('p', { class: 'note' }, '엑셀 · CSV 머리행은 log_id · equipment_id · found_at · fixed_at · symptom · failure_part · cause · action, 또는 한글로 정비 번호 · 설비 · 발견 일시 · 조치 일시 · 증상 · 고장 부위 · 원인 · 조치. 설비와 발견 일시만 있으면 읽습니다(조치 일시가 없으면 발견 일시로). 설비 이름은 2초 로그의 프레스 이름과 같아야 라벨이 붙습니다(띄어쓰기 · 대소문자 · 「-」 「_」는 가리지 않음).'),
+      logs.length ? table(['정비 번호', '설비', '발견 일시', '조치 일시', '증상', '고장 부위', '원인', '조치', '센서 로그', ''], rows, { cls: 'items' })
+        : h('p', { class: 'note' }, '아직 없습니다. 파일로 넣거나 아래에서 한 줄씩 넣어 주세요.'),
+      h('div', { class: 'btn-row', style: 'margin-top:10px' },
+        h('label', { class: 'btn btn-primary' }, file, '이력 파일 넣기(엑셀 · CSV)'),
+        h('button', { type: 'button', class: 'btn', onclick: function () { var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(LB.logsToAoa(logs)), 'maintenance_log'); XLSX.writeFile(wb, '정비고장이력_maintenance_log.xlsx'); } }, logs.length ? '엑셀로 내려받기' : '빈 양식 내려받기'),
+        h('a', { class: 'btn', href: 'samples/' + encodeURIComponent('가상_정비고장이력_maintenance_log.csv'), download: '' }, '가상 이력 CSV(예시)'),
+        evFails.length ? h('button', { type: 'button', class: 'btn', onclick: function () {
+          var add = LB.logsFromEvents(db.events), have = {};
+          logs.forEach(function (l) { have[LB.eqKey(l.equipment_id) + '|' + l.found_at] = 1; });
+          add = add.filter(function (l) { return !have[LB.eqKey(l.equipment_id) + '|' + l.found_at]; }).map(function (l) { l.log_id = ''; return l; });
+          if (!add.length) { toast('「고장 전 이탈」의 고장 이력이 이미 다 들어 있습니다.'); return; }
+          mlSetLogs(logs.concat(add), '「고장 전 이탈」 고장 이력 ' + add.length + '건을 넣었습니다(조치 일시 = 고장 + 정지 분). 원인 · 조치는 고쳐 넣어 주세요.');
+        } }, '「고장 전 이탈」 고장 이력에서 가져오기(' + evFails.length + '건)') : null,
+        db.sampleKind === 'virtual' && !logs.some(function (l) { return l.virtual; }) ? h('button', { type: 'button', class: 'btn', onclick: function () { mlSetLogs(LB.mergeLogs(logs, LB.cleanLogs(VD.mlog())), '가상 정비 · 고장 이력 3건을 넣었습니다.'); } }, '가상 이력 3건 넣기') : null,
+        logs.some(function (l) { return l.virtual; }) ? h('button', { type: 'button', class: 'btn', onclick: function () { if (!confirm('가상 이력만 뺄까요?')) return; mlSetLogs(logs.filter(function (l) { return !l.virtual; })); } }, '가상 이력만 빼기') : null),
+      h('h3', { style: 'margin-top:14px', id: 'mlLogForm' }, ed ? ed.log_id + ' 고치기' : '한 줄 넣기'),
+      h('div', { class: 'ml-form' }, fld('정비 번호 (log_id)', F.log_id), fld('설비 (equipment_id)', h('span', null, F.equipment_id, dl)), fld('발견 일시 (found_at)', F.found_at), fld('조치 일시 (fixed_at)', F.fixed_at),
+        fld('증상 (symptom)', F.symptom), fld('고장 부위 (failure_part)', F.failure_part), fld('원인 (cause)', F.cause), fld('조치 (action)', F.action)),
+      h('div', { class: 'btn-row', style: 'margin-top:10px' },
+        h('button', { type: 'button', class: 'btn btn-primary', onclick: function () {
+          var o = {}; LB.MLOG_FIELDS.forEach(function (f) { o[f.id] = f.id === 'found_at' || f.id === 'fixed_at' ? P.fromLocalInput(F[f.id].value) : F[f.id].value; });
+          if (ed) o.virtual = ed.virtual;
+          var l = LB.cleanLog(o); if (!l) { toast('설비와 발견 일시를 넣어 주세요.', true); return; }
+          if (l.log_id && logs.some(function (x) { return x.log_id === l.log_id && x !== ed; })) { toast('이미 있는 정비 번호입니다: ' + l.log_id, true); return; }
+          var next = ed ? logs.map(function (x) { return x === ed ? l : x; }) : logs.concat([l]);
+          ui.ml.edit = ''; mlSetLogs(next, ed ? '고쳤습니다.' : '넣었습니다.');
+        } }, ed ? '고친 내용 저장' : '한 줄 넣기'),
+        ed ? h('button', { type: 'button', class: 'btn', onclick: function () { ui.ml.edit = ''; render(); } }, '고치기 취소') : null));
   }
 
-  /* ── ⑤ AI 분석 ──────────────────────────── */
+  function mlRuleCard() {
+    var R = db.ml.rule;
+    var pre = h('input', { type: 'number', min: 0, max: 720, step: 0.5, value: R.preH, inputmode: 'decimal', 'aria-label': '고장 전 구간(시간)' });
+    var post = h('input', { type: 'number', min: 0, max: 168, step: 0.5, value: R.postH, inputmode: 'decimal', 'aria-label': '조치 뒤 안정 구간(시간)' });
+    return h('section', { class: 'card' }, h('h2', null, '2. 라벨 규칙'),
+      h('ul', { class: 'note' },
+        h('li', null, h('span', { class: 'pill lab-1' }, '이상'), ' 같은 설비에서 [발견 일시 − 고장 전 구간, 조치 일시] 안 — 고장 전 · 고장 중'),
+        h('li', null, h('span', { class: 'pill lab-2' }, '제외'), ' 조치 일시 뒤 안정 구간 — 고친 직후라 정상인지 불확실(학습에서 뺌)'),
+        h('li', null, h('span', { class: 'pill lab-0' }, '정상'), ' 그 밖'),
+        h('li', null, '고장 전 구간 기본 24시간은 「고장 전 이탈」의 「고장 앞 24시간」과 같은 정의입니다. 두 이력이 겹치면 이상이 제외보다 앞서고, 아래 3에서 사람이 고른 수동 라벨이 규칙보다 앞섭니다.')),
+      h('div', { class: 'form-grid' }, fld('고장 전 구간 (시간)', pre, '발견 일시보다 이만큼 앞부터 이상'), fld('조치 뒤 안정 구간 (시간)', post, '0 이면 제외 구간 없음')),
+      h('div', { class: 'btn-row', style: 'margin-top:10px' },
+        h('button', { type: 'button', class: 'btn btn-primary', onclick: function () { db.ml.rule = LB.cleanRule({ preH: pre.value, postH: post.value }); mlCache = null; save(); toast('라벨 규칙을 바꿨습니다.'); render(); } }, '규칙 적용'),
+        h('button', { type: 'button', class: 'btn', onclick: function () { db.ml.rule = LB.cleanRule({}); mlCache = null; save(); render(); } }, '기본값(24시간 · 2시간)')));
+  }
+
+  function mlViewCard(mc) {
+    var ps = mc.list.map(function (x) { return x.s.press; });
+    if (ps.indexOf(ui.ml.press) < 0) ui.ml.press = (mc.list.filter(function (x) { return x.counts.n[1]; })[0] || mc.list[0]).s.press;
+    var X = mc.list.filter(function (x) { return x.s.press === ui.ml.press; })[0], s = X.s;
+    var days = daysOf(s);
+    if (ui.ml.day !== 'all' && days.indexOf(ui.ml.day) < 0) {
+      var firstAb = X.segs.filter(function (g) { return g.lab === LB.ABNORMAL; })[0];
+      ui.ml.day = firstAb ? P.dateOf(firstAb.to) : days[0] || 'all';
+    }
+    var from = ui.ml.day === 'all' ? s.t[0] : P.parseStamp(ui.ml.day + ' 00:00:00'), to = ui.ml.day === 'all' ? s.t[s.n - 1] : from + 86399;
+    var r = P.rangeIdx(s, from, to); if (r[1] > r[0]) { from = s.t[r[0]]; to = s.t[r[1] - 1]; }
+    var pSel = h('select', { 'aria-label': '설비' }, ps.map(function (p) { return h('option', { value: p, selected: p === ui.ml.press ? true : null }, p); }));
+    pSel.addEventListener('change', function () { ui.ml.press = pSel.value; ui.ml.day = ''; render(); });
+    var dSel = h('select', { 'aria-label': '날짜' }, [h('option', { value: 'all' }, '전체')].concat(days.map(function (d) { return h('option', { value: d, selected: d === ui.ml.day ? true : null }, d); })));
+    dSel.addEventListener('change', function () { ui.ml.day = dSel.value; render(); });
+    var bands = LB.labelBands(X.segs, from, to);
+    var marks = [];
+    db.ml.logs.forEach(function (l) {
+      if (LB.eqKey(l.equipment_id) !== LB.eqKey(s.press)) return;
+      marks.push({ t: P.parseStamp(l.found_at), label: l.log_id + ' 발견 — ' + (l.symptom || ''), short: l.log_id + ' 발견', cls: 'fail' });
+      if (l.fixed_at !== l.found_at) marks.push({ t: P.parseStamp(l.fixed_at), label: l.log_id + ' 조치 — ' + (l.action || ''), short: l.log_id + ' 조치', cls: 'maint' });
+    });
+    var figs = LB.CHS.filter(function (ch) { return s[ch]; }).map(function (ch) {
+      var ds = P.downsample(s.t, Array.prototype.slice.call(s[ch], r[0], r[1]), null, r[0], 600);
+      return C.spcFigure(s.press + ' · ' + LB.CH_LABEL[ch] + '(' + LB.CH_UNIT[ch] + ')', { ds: ds, unit: LB.CH_UNIT[ch], color: CH_META[ch].color, from: from, to: to, bands: bands, bandLegend: true, noViol: true, noBase: true, marks: marks, gapSec: P.cleanOpts(db.spc).gapSec });
+    });
+    // 구간 표 — 이 범위의 이상 · 제외 · 수동 구간
+    var segs = X.segs.filter(function (g) { return g.to >= from && g.from <= to && (g.lab !== LB.NORMAL || g.src === LB.SRC_MANUAL); });
+    var fIn = h('input', { type: 'datetime-local', step: 1, value: ui.ml.from || P.toLocalInput(from), 'aria-label': '시작' });
+    var tIn = h('input', { type: 'datetime-local', step: 1, value: ui.ml.to || P.toLocalInput(to), 'aria-label': '끝' });
+    var lSel = h('select', { 'aria-label': '라벨' }, LB.LABELS.map(function (x) { return h('option', { value: x.id, selected: x.id === ui.ml.lab ? true : null }, x.label); }));
+    var note = h('input', { type: 'text', placeholder: '예: 금형 교체 시운전 — 정상 아님', 'aria-label': '메모' });
+    var mine = db.ml.manual.filter(function (m) { return LB.eqKey(m.press) === LB.eqKey(s.press); });
+    return h('section', { class: 'card', id: 'mlView' }, h('h2', null, '3. 라벨 보기 · 고치기'),
+      h('div', { class: 'form-grid' }, fld('설비', pSel), fld('날짜', dSel),
+        h('p', { class: 'note' }, s.press + ' 전체 ' + N(X.counts.total) + '행 — 정상 ' + N(X.counts.n[0]) + ' · 이상 ' + N(X.counts.n[1]) + ' · 제외 ' + N(X.counts.n[2]) + (mine.length ? ' · 수동 라벨 ' + mine.length + '건' : ''))),
+      h('div', { class: 'grid-2' }, figs),
+      h('h3', { style: 'margin-top:14px' }, '이 범위의 이상 · 제외 · 수동 구간 (' + segs.length + ')'),
+      segs.length ? table(['시작', '끝', '길이', '라벨', '근거', '행', ''], segs.slice(0, 80).map(function (g) {
+        return [P.stampText(g.from), P.stampText(g.to), P.durText(g.to - g.from), labPill(g.lab, g.src), (g.src === LB.SRC_MANUAL ? '수동 ' : '규칙 ') + (g.id || ''), N(g.n),
+          h('button', { type: 'button', class: 'btn btn-sm', onclick: function () { ui.ml.from = P.toLocalInput(g.from); ui.ml.to = P.toLocalInput(g.to); render(); var e = document.getElementById('mlManual'); if (e) e.scrollIntoView({ block: 'center' }); } }, '이 구간 고르기')];
+      }), { num: [0, 0, 0, 0, 0, 1, 0] }) : h('p', { class: 'note' }, '이 범위는 모두 규칙상 정상입니다.'),
+      segs.length > 80 ? h('p', { class: 'note' }, '앞 80개만 보입니다. 날짜를 골라 좁혀 주세요.') : null,
+      h('h3', { id: 'mlManual', style: 'margin-top:14px' }, '구간을 골라 라벨 고치기 (수동 라벨이 규칙보다 앞섬)'),
+      h('div', { class: 'ml-form' }, fld('시작', fIn), fld('끝', tIn), fld('라벨', lSel), fld('메모', note)),
+      h('div', { class: 'btn-row', style: 'margin-top:10px' },
+        h('button', { type: 'button', class: 'btn btn-primary', onclick: function () {
+          var m = LB.cleanManual({ press: s.press, from: P.fromLocalInput(fIn.value), to: P.fromLocalInput(tIn.value), label: lSel.value, note: note.value }, db.ml.manual.length);
+          if (!m) { toast('시작 · 끝 시각을 넣어 주세요.', true); return; }
+          var rr = P.rangeIdx(s, P.parseStamp(m.from), P.parseStamp(m.to));
+          db.ml.manual.push(m); ui.ml.from = ''; ui.ml.to = ''; ui.ml.lab = Number(lSel.value); mlCache = null; save();
+          toast(s.press + ' ' + m.from + ' ~ ' + m.to + ' (' + N(rr[1] - rr[0]) + '행) 을 「' + LB.LABELS[m.label].label + '」로 고쳤습니다.'); render();
+        } }, '이 구간에 라벨 붙이기'),
+        h('button', { type: 'button', class: 'btn', onclick: function () { ui.ml.from = P.toLocalInput(from); ui.ml.to = P.toLocalInput(to); render(); } }, '보는 범위 전체로')),
+      mine.length ? table(['설비', '시작', '끝', '라벨', '메모', ''], mine.map(function (m) {
+        return [m.press, m.from, m.to, labPill(m.label, LB.SRC_MANUAL), m.note || '-', h('button', { type: 'button', class: 'btn btn-sm btn-danger', onclick: function () { db.ml.manual = db.ml.manual.filter(function (x) { return x.id !== m.id; }); mlCache = null; save(); render(); } }, '되돌리기')];
+      }), { cls: 'items' }) : null);
+  }
+
+  function mlStatsCard(mc) {
+    var tot = [0, 0, 0], man = 0;
+    var rows = mc.list.map(function (x) {
+      var c = x.counts; tot[0] += c.n[0]; tot[1] += c.n[1]; tot[2] += c.n[2]; man += c.manual[0] + c.manual[1] + c.manual[2];
+      return [x.s.press, N(c.total), N(c.n[0]) + ' (' + pctOf(c.n[0], c.total) + ')', N(c.n[1]) + ' (' + pctOf(c.n[1], c.total) + ')', N(c.n[2]) + ' (' + pctOf(c.n[2], c.total) + ')', N(c.manual[0] + c.manual[1] + c.manual[2])];
+    });
+    var all = tot[0] + tot[1] + tot[2];
+    rows.push([h('strong', null, '합계'), N(all), N(tot[0]), N(tot[1]), N(tot[2]), N(man)]);
+    var fp = ui.ml.statPress || '';
+    var sel = h('select', { 'aria-label': '특징 요약 설비' }, [h('option', { value: '' }, '모든 설비')].concat(mc.list.map(function (x) { return h('option', { value: x.s.press, selected: x.s.press === fp ? true : null }, x.s.press); })));
+    sel.addEventListener('change', function () { ui.ml.statPress = sel.value; render(); });
+    var fs = LB.featureStats(mc.list.filter(function (x) { return !fp || x.s.press === fp; }));
+    var frows = LB.LABELS.map(function (lb) {
+      return [labPill(lb.id)].concat(LB.CHS.map(function (ch) { var v = fs[lb.id][ch]; return v.n ? N(v.mean, 2) + ' ± ' + N(v.std, 2) : '-'; })).concat([N(fs[lb.id][LB.CHS[0]].n)]);
+    });
+    return h('section', { class: 'card' }, h('h2', null, '4. 라벨 분포 · 특징 요약'),
+      table(['설비', '행', '정상', '이상', '제외', '수동 라벨 행'], rows, { num: [0, 1, 1, 1, 1, 1] }),
+      h('div', { class: 'form-grid', style: 'margin-top:14px' }, fld('특징 요약 설비', sel)),
+      table(['라벨'].concat(LB.CHS.map(function (ch) { return LB.CH_LABEL[ch] + '(' + LB.CH_UNIT[ch] + ') 평균 ± 표준편차'; })).concat(['행']), frows, { num: [0, 1, 1, 1, 1, 1] }),
+      h('p', { class: 'note' }, '2초 원값 기준입니다. 설비마다 평소 값이 달라 「모든 설비」는 섞인 값입니다 — 설비를 골라 비교해 주세요. 이상에는 고장으로 멈춘 시간(전류 · 진동이 낮음)도 들어갑니다.'));
+  }
+
+  function mlModelCard(mc) {
+    var M = db.ml.model, m = mlModel(mc), cm = m.matrix;
+    var kSel = h('select', { 'aria-label': '판정 기준 k' }, [2, 2.5, 3, 3.5, 4, 5, 6].map(function (k) { return h('option', { value: k, selected: k === M.k ? true : null }, '|z| > ' + k); }));
+    var bSel = h('select', { 'aria-label': '묶는 칸' }, [[10, '10초'], [30, '30초'], [60, '1분'], [300, '5분']].map(function (b) { return h('option', { value: b[0], selected: b[0] === M.binSec ? true : null }, b[1] + ' 평균'); }));
+    function apply() { db.ml.model = LB.cleanModel({ k: kSel.value, binSec: bSel.value }); save(); render(); }
+    kSel.addEventListener('change', apply); bSel.addEventListener('change', apply);
+    var P3 = function (v) { return v == null ? '-' : L.pctText(v); };
+    var enough = m.testAbnormal > 0 && cm.tn + cm.fp > 0;
+    return h('section', { class: 'card' }, h('h2', null, '5. 기준선 모델 (z 점수) — 맛보기'),
+      h('p', { class: 'note' }, '설비마다 정상 칸의 채널별 평균 · 표준편차를 잡고, 전압 · 전류 · 진동 · 온도 z 점수 가운데 가장 큰 값이 k 를 넘으면 「이상」으로 판정합니다. 칸 = 고른 시간 평균. 정상 칸을 시간순으로 번갈아 학습(기준 잡기) · 시험으로 나누고, 이상 칸은 학습에 쓰지 않고 시험에만 씁니다. 제외 칸은 쓰지 않습니다.'),
+      h('div', { class: 'form-grid' }, fld('판정 기준', kSel), fld('묶는 칸', bSel), h('p', { class: 'note' }, '학습 ' + N(m.train) + '칸 · 시험 ' + N(m.test) + '칸(이상 ' + N(m.testAbnormal) + ')')),
+      enough ? h('div', { class: 'grid-2' },
+        h('div', null, h('table', { class: 'cm-table' },
+          h('thead', null, h('tr', null, h('th', null, '실제 \\ 판정'), h('th', null, '이상'), h('th', null, '정상'))),
+          h('tbody', null,
+            h('tr', null, h('th', null, '이상'), h('td', { class: 'hit' }, N(cm.tp)), h('td', { class: 'miss' }, N(cm.fn))),
+            h('tr', null, h('th', null, '정상'), h('td', { class: 'miss' }, N(cm.fp)), h('td', { class: 'hit' }, N(cm.tn)))))),
+        h('div', { class: 'tiles' }, tile('정확도', P3(cm.accuracy), '맞게 판정한 칸'), tile('재현율', P3(cm.recall), '이상 칸 중 잡은 것'), tile('정밀도', P3(cm.precision), '이상 판정 중 실제 이상'), tile('특이도', P3(cm.specificity), '정상 칸 중 정상 판정')))
+        : h('p', { class: 'alert info' }, '이상 칸과 정상 칸이 모두 있어야 잴 수 있습니다. 정비 · 고장 이력을 넣어 주세요.'),
+      enough ? h('details', null, h('summary', null, 'k 를 바꾸면'), table(['k', '잡은 이상', '놓친 이상', '헛경보', '정확도', '재현율', '정밀도'], m.sweep.map(function (c) { return ['|z| > ' + c.k, N(c.tp), N(c.fn), N(c.fp), P3(c.accuracy), P3(c.recall), P3(c.precision)]; }), { num: [0, 1, 1, 1, 1, 1, 1] })) : null,
+      h('ul', { class: 'note' },
+        h('li', null, '숫자는 지금 들어 있는 자료로 이 브라우저에서 바로 계산한 값입니다' + (db.sampleKind === 'virtual' ? '(지금은 가상 데이터 — 실제 성능이 아님)' : '') + '. 이웃한 칸은 서로 비슷해 실제보다 좋게 나올 수 있습니다.'),
+        h('li', null, '고장 전 구간 전부를 이상으로 두었으므로, 값이 아직 변하기 전 시간도 이상에 들어가 재현율이 낮게 나옵니다. 2의 고장 전 구간을 바꿔 가며 비교해 보세요.'),
+        h('li', null, '더 나은 모델(로지스틱 회귀 · 트리 등)은 아래 6의 CSV 를 파이썬 · 엑셀에서 불러와 만듭니다.')));
+  }
+
+  function mlExportCard(mc) {
+    var drop = h('input', { type: 'checkbox' }); drop.checked = !!ui.ml.dropExclude;
+    drop.addEventListener('change', function () { ui.ml.dropExclude = drop.checked; });
+    return h('section', { class: 'card' }, h('h2', null, '6. 학습용 데이터셋 내려받기'),
+      h('p', { class: 'note' }, 'CSV 칸: ' + LB.CSV_HEAD.join(' · ') + ' — 시각 · 설비 · 전압 · 전류 · 진동 · 온도 · 라벨(0 정상 · 1 이상 · 2 제외) · 라벨 이름 · 라벨 근거(rule 규칙 · manual 수동) · 근거가 된 정비 번호(log_id) 또는 수동 라벨 번호. UTF-8(BOM), 2초 원값 그대로입니다.'),
+      h('label', { class: 'opt' }, drop, h('span', { class: 't' }, '「제외」 행은 빼고 내려받기')),
+      h('div', { class: 'btn-row', style: 'margin-top:10px' },
+        h('button', { type: 'button', class: 'btn btn-primary', onclick: function () {
+          toast('CSV 를 만드는 중입니다…');
+          setTimeout(function () {
+            var c = LB.datasetCsv(mc.list, { dropExclude: ui.ml.dropExclude });
+            download('학습용_라벨데이터_' + mc.list.map(function (x) { return x.s.press; }).join('-') + '.csv', new Blob(c.parts, { type: 'text/csv;charset=utf-8' }));
+            toast(N(c.rows) + '행을 내려받았습니다.');
+          }, 30);
+        } }, '학습용 CSV 내려받기')));
+  }
+
+  function pageMl() {
+    var ps = Object.keys(raw).sort(L.natCmp);
+    var out = [pageHead('②', '머신러닝 · 라벨링', '정비 · 고장 이력으로 전압 · 전류 · 진동 · 온도 2초 로그에 정상 / 이상 라벨을 붙이고, 사람이 고치고, 학습용 데이터셋으로 내려받습니다.')];
+    if (db.sampleKind === 'virtual') out.push(h('p', { class: 'alert warn' }, h('strong', null, '가상 데이터입니다. '), '프레스 3대의 2초 로그와 정비 · 고장 이력 3건(V-0001~0003)은 모두 지어낸 값입니다. 실제 로그와 이력을 넣으면 같은 화면에서 실제 라벨이 붙습니다.'));
+    out.push(mlLogCard(ps), mlRuleCard());
+    if (!ps.length) {
+      out.push(h('section', { class: 'card empty' }, h('p', null, '아직 2초 센서 로그가 없습니다. 라벨은 2초 로그에 붙습니다.'),
+        h('div', { class: 'btn-row', style: 'justify-content:center' }, h('button', { type: 'button', class: 'btn btn-primary', onclick: askVirtual }, '가상 고장 데이터로 시작'), h('a', { class: 'btn', href: '#/import' }, '데이터 가져오기로'))));
+      return out;
+    }
+    var mc = mlList();
+    out.push(mlViewCard(mc), mlStatsCard(mc), mlModelCard(mc), mlExportCard(mc));
+    return out;
+  }
+
+  /* ── ③ AI 분석 ──────────────────────────── */
   function pageAi() {
-    if (!db.records.length) return [pageHead('⑤', 'AI 분석'), emptyNotice()];
+    if (!db.records.length) return [pageHead('③', 'AI 분석'), emptyNotice()];
     var mask = db.maskNames !== false;
     if (mask) {
       db.aliases.press = L.assignAliases(db.aliases.press, Object.keys(db.presses).concat(A.statuses.map(function (s) { return s.id; })), L.ALIAS.press);
-      db.aliases.die = L.assignAliases(db.aliases.die, A.dies.map(function (d) { return d.id; }), L.ALIAS.die);
     }
-    var months = L.monthsOf(A.rows);
-    var info = L.buildAiPromptInfo({ asOf: A.asOf, range: A.range, rules: A.rules, statuses: A.statuses, anomalies: A.anomalies, dies: A.dies, overhauls: A.overhauls,
-      month: months.length ? L.monthDetail(A.rows, db.presses, months[months.length - 1]) : null, aliases: mask ? db.aliases : null });
+    var info = L.buildAiPromptInfo({ asOf: A.asOf, range: A.range, rules: A.rules, statuses: A.statuses, anomalies: A.anomalies, aliases: mask ? db.aliases : null });
     var prompt = info.prompt;
     function back(t) { return mask ? L.unmaskText(t, db.aliases) : t; }
-    var answer = h('textarea', { rows: 10, placeholder: 'AI 답을 여기에 붙여 넣어 주세요. 별칭(설비1·금형1)은 실제 이름으로 되돌려 월별 보고서의 「AI 분석 의견」에 넣습니다.' });
+    var answer = h('textarea', { rows: 10, placeholder: 'AI 답을 여기에 붙여 넣어 주세요. 별칭(설비1)은 실제 이름으로 되돌려 이 브라우저에 저장합니다.' });
     answer.value = (db.aiNotes || {})[A.asOf] || '';
     answer.addEventListener('input', function () { db.aiNotes[A.asOf] = back(answer.value); save(); });
     answer.addEventListener('change', function () { var b = back(answer.value); if (b !== answer.value) { answer.value = b; toast('답의 별칭을 실제 이름으로 되돌렸습니다.'); } });
@@ -1484,15 +1556,15 @@
       mask && mapRows.length ? h('details', null, h('summary', null, '별칭 대응표 — 이 프롬프트에 쓴 ' + mapRows.length + '개 (이 PC 에만 있음)'),
         table(['별칭', '실제 이름', '구분'], mapRows, { cls: 'alias' })) : null);
     return [
-      pageHead('⑤', 'AI 분석 (반자동)', '도구가 계산한 사실(상태·근거 숫자·예정일)만 담은 프롬프트를 만듭니다. 로그 원본은 넣지 않습니다.'),
+      pageHead('③', 'AI 분석 (반자동)', '도구가 계산한 사실(상태·근거 숫자)만 담은 프롬프트를 만듭니다. 로그 원본은 넣지 않습니다.'),
       h('section', { class: 'card', id: 'ai' },
         h('ol', { class: 'steps' },
           h('li', null, '아래 프롬프트를 복사해 회사가 허용한 AI(ChatGPT 등)에 붙여 넣어 주세요.'),
-          h('li', null, '받은 답을 「AI 답」 칸에 붙여 넣으면 별칭이 실제 이름으로 돌아가 월별 보고서에 들어갑니다. 답은 꼭 검토해 주세요 — 원인은 추정입니다.')),
+          h('li', null, '받은 답을 「AI 답」 칸에 붙여 넣으면 별칭이 실제 이름으로 돌아가 저장됩니다. 답은 꼭 검토해 주세요 — 원인은 추정입니다.')),
         maskCard, promptBox,
         h('div', { class: 'btn-row', style: 'margin:10px 0' },
           h('button', { type: 'button', class: 'btn btn-primary', onclick: function () { copyText(prompt); } }, '프롬프트 복사'),
-          AIP.sendButton('설정한 AI 서버로 보내기(선택)', function () { return prompt; }, function (text) { text = back(text); answer.value = text; db.aiNotes[A.asOf] = text; save(); toast('AI 답을 받았습니다(별칭은 실제 이름으로 되돌림). 검토 후 보고서에 씁니다.'); },
+          AIP.sendButton('설정한 AI 서버로 보내기(선택)', function () { return prompt; }, function (text) { text = back(text); answer.value = text; db.aiNotes[A.asOf] = text; save(); toast('AI 답을 받았습니다(별칭은 실제 이름으로 되돌림). 꼭 검토해 주세요.'); },
             { toast: toast, settingsHref: '#/settings', system: '너는 프레스 설비 보전 담당자를 돕는 보조야. 주어진 사실 밖의 숫자를 만들지 마.' })),
         fld('AI 답 (기준일 ' + A.asOf + ')', answer, '붙여 넣은 답은 이 브라우저에 저장됩니다.'))
     ];
@@ -1500,43 +1572,19 @@
 
   /* ── 설정 ───────────────────────────────── */
   function pageSettings() {
-    var pIds = Object.keys(db.presses).sort(L.natCmp), dIds = Object.keys(db.dies).sort(L.natCmp);
+    var pIds = Object.keys(db.presses).sort(L.natCmp);
+    // v2.1 — 오버홀 주기 · 금형 수명 칸은 화면에서 뺐습니다. 저장된 값은 그대로 둡니다(종류 · 메모만 고침)
     var pInputs = pIds.map(function (id) {
       var p = L.cleanPress(db.presses[id], id);
-      var x = { id: id, type: h('input', { value: p.type, 'aria-label': id + ' 종류' }), ohStrokes: numIn(p.ohStrokes, id + ' 오버홀 주기 타수'), ohDays: numIn(p.ohDays, id + ' 오버홀 주기 일수'),
-        lastOH: h('input', { type: 'date', value: p.lastOH, 'aria-label': id + ' 마지막 오버홀' }), ohBase: numIn(p.ohBase, id + ' 로그 이전 타수'), note: h('input', { value: p.note, 'aria-label': id + ' 메모' }) };
-      x.cells = [h('strong', null, id), x.type, x.ohStrokes, x.ohDays, x.lastOH, x.ohBase, x.note, delBtn('presses', id)];
-      return x;
-    });
-    var dInputs = dIds.map(function (id) {
-      var d = L.cleanDie(db.dies[id], id);
-      var x = { id: id, life: numIn(d.life, id + ' 수명 기준 타수'), startDate: h('input', { type: 'date', value: d.startDate, 'aria-label': id + ' 사용 시작일' }),
-        baseStrokes: numIn(d.baseStrokes, id + ' 시작 시점 사용 타수'), note: h('input', { value: d.note, 'aria-label': id + ' 메모' }) };
-      x.cells = [h('strong', null, id), x.life, x.startDate, x.baseStrokes, x.note, delBtn('dies', id)];
+      var x = { id: id, type: h('input', { value: p.type, 'aria-label': id + ' 종류' }), note: h('input', { value: p.note, 'aria-label': id + ' 메모' }) };
+      x.cells = [h('strong', null, id), x.type, x.note, delBtn('presses', id)];
       return x;
     });
     function saveMaster() {
-      pInputs.forEach(function (x) { db.presses[x.id] = L.cleanPress({ type: x.type.value, ohStrokes: x.ohStrokes.value, ohDays: x.ohDays.value, lastOH: x.lastOH.value, ohBase: x.ohBase.value, note: x.note.value }, x.id); });
-      dInputs.forEach(function (x) { db.dies[x.id] = L.cleanDie({ life: x.life.value, startDate: x.startDate.value, baseStrokes: x.baseStrokes.value, note: x.note.value }, x.id); });
-      save(); toast('기준표를 저장했습니다.'); render();
+      pInputs.forEach(function (x) { db.presses[x.id] = L.cleanPress(Object.assign({}, db.presses[x.id] || {}, { type: x.type.value, note: x.note.value }), x.id); });
+      save(); toast('설비 기준표를 저장했습니다.'); render();
     }
-    var newP = h('input', { placeholder: '예: P5', 'aria-label': '새 프레스 이름' }), newD = h('input', { placeholder: '예: M-09', 'aria-label': '새 금형 이름' });
-    var masterFile = h('input', { type: 'file', accept: '.xlsx,.xls' });
-    masterFile.addEventListener('change', function () {
-      var f = masterFile.files[0]; if (!f) return;
-      f.arrayBuffer().then(function (buf) {
-        var wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: false });
-        var n = { p: 0, d: 0 };
-        wb.SheetNames.forEach(function (sn) {
-          var aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null });
-          var r = L.masterFromAoa(aoa);
-          Object.keys(r.presses).forEach(function (k) { db.presses[k] = r.presses[k]; n.p++; });
-          Object.keys(r.dies).forEach(function (k) { db.dies[k] = r.dies[k]; n.d++; });
-        });
-        save(); toast('기준표를 불러왔습니다 — 프레스 ' + n.p + '대 · 금형 ' + n.d + '개'); render();
-      }).catch(function (e) { toast('불러오지 못했습니다: ' + e.message, true); });
-      masterFile.value = '';
-    });
+    var newP = h('input', { placeholder: '예: P5', 'aria-label': '새 프레스 이름' });
     var backup = h('input', { type: 'file', accept: '.json' });
     backup.addEventListener('change', function () {
       var f = backup.files[0]; if (!f) return;
@@ -1546,52 +1594,34 @@
       }).catch(function (e) { toast('불러오지 못했습니다: ' + e.message, true); });
     });
     return [
-      pageHead('설정', '설비·금형 기준표 · 판정 기준 · AI 연결 · 백업'),
-      h('section', { class: 'card' }, h('h2', null, '설비(프레스) 기준표 — 오버홀 주기'),
-        h('p', { class: 'note' }, '로그를 가져오면 처음 보는 프레스가 자동으로 더해집니다. 오버홀 주기는 타수·일수 가운데 아는 것만 넣어도 됩니다. 「프레스 종류」는 월별 보고서의 묶음 기준입니다(비우면 로그의 값을 씀).'),
-        pIds.length ? table(['프레스', '프레스 종류', '오버홀 주기(타수)', '오버홀 주기(일)', '마지막 오버홀 일자', '마지막 오버홀 뒤 로그 이전 타수', '메모', ''], pInputs.map(function (x) { return x.cells; }), { cls: 'items' }) : h('p', { class: 'note' }, '아직 없습니다.'),
+      pageHead('설정', '설비 기준표 · 판정 기준 · AI 연결 · 백업'),
+      h('section', { class: 'card' }, h('h2', null, '설비(프레스) 기준표'),
+        h('p', { class: 'note' }, '로그를 가져오면 처음 보는 프레스가 자동으로 더해집니다. 「프레스 종류」를 비우면 로그의 값을 씁니다.'),
+        pIds.length ? table(['프레스', '프레스 종류', '메모', ''], pInputs.map(function (x) { return x.cells; }), { cls: 'items' }) : h('p', { class: 'note' }, '아직 없습니다.'),
         h('div', { class: 'btn-row', style: 'margin-top:10px' }, newP, h('button', { type: 'button', class: 'btn', onclick: function () {
           var id = newP.value.trim(); if (!id) return; if (db.presses[id]) { toast('이미 있는 프레스입니다.', true); return; }
           db.presses[id] = L.emptyPress(id); save(); render();
-        } }, '프레스 추가'))),
-      h('section', { class: 'card' }, h('h2', null, '금형 기준표 — 수명 기준 타수'),
-        h('p', { class: 'note' }, '사용 타수 = 시작 시점 사용 타수 + 사용 시작일(교체·재연마한 날)부터 로그에서 센 타수. 시작일을 비우면 로그 전체를 셉니다.'),
-        dIds.length ? table(['금형', '수명 기준 타수', '사용 시작일(교체일)', '시작 시점 사용 타수', '메모', ''], dInputs.map(function (x) { return x.cells; }), { cls: 'items' }) : h('p', { class: 'note' }, '아직 없습니다.'),
-        h('div', { class: 'btn-row', style: 'margin-top:10px' }, newD, h('button', { type: 'button', class: 'btn', onclick: function () {
-          var id = newD.value.trim(); if (!id) return; if (db.dies[id]) { toast('이미 있는 금형입니다.', true); return; }
-          db.dies[id] = L.emptyDie(id); save(); render();
-        } }, '금형 추가'))),
-      h('div', { class: 'submit-bar' },
-        h('button', { type: 'button', class: 'btn', onclick: function () { exportMaster(); } }, '기준표 엑셀로 내려받기'),
-        h('label', { class: 'btn' }, masterFile, '기준표 엑셀 불러오기'),
-        h('button', { type: 'button', class: 'btn btn-primary', onclick: saveMaster }, '기준표 저장')),
+        } }, '프레스 추가'),
+          h('button', { type: 'button', class: 'btn btn-primary', onclick: saveMaster }, '기준표 저장'))),
       rulesCard(),
       AIP.settingsCard({ toast: toast, onChange: render }),
       h('section', { class: 'card' }, h('h2', null, '백업'),
-        h('p', { class: 'note' }, '쌓인 로그와 기준표는 이 브라우저에만 있습니다. 다른 PC 로 옮기거나 브라우저 정리 전에 JSON 으로 받아 두세요. 2초 센서 로그 원본은 너무 커서 JSON 에 넣지 않습니다(하루 묶음과 관리도 기준은 들어감) — 원본 CSV 를 따로 보관해 주세요.'),
+        h('p', { class: 'note' }, '쌓인 로그 · 기준표 · 정비 · 고장 이력 · 수동 라벨은 이 브라우저에만 있습니다. 다른 PC 로 옮기거나 브라우저 정리 전에 JSON 으로 받아 두세요. 2초 센서 로그 원본은 너무 커서 JSON 에 넣지 않습니다(하루 묶음과 관리도 기준은 들어감) — 원본 CSV 를 따로 보관해 주세요.'),
         h('div', { class: 'btn-row' },
           h('button', { type: 'button', class: 'btn', onclick: function () { download('프레스예지보전_백업_' + new Date().toISOString().slice(0, 10) + '.json', new Blob([JSON.stringify(db)], { type: 'application/json' })); } }, 'JSON 백업 내려받기'),
           h('label', { class: 'btn' }, backup, 'JSON 백업 불러오기')))
     ];
   }
-  function numIn(v, label) { return h('input', { type: 'number', min: 0, step: 'any', inputmode: 'numeric', value: v == null ? '' : v, 'aria-label': label }); }
   function delBtn(kind, id) {
     return h('button', { type: 'button', class: 'btn btn-sm btn-danger', 'aria-label': id + ' 기준표에서 빼기', onclick: function () {
-      var used = db.records.some(function (r) { return kind === 'presses' ? r.press === id : r.die === id; });
+      var used = db.records.some(function (r) { return r.press === id; });
       if (!confirm(id + ' 을(를) 기준표에서 뺄까요?' + (used ? ' 로그에 남아 있어 다음에 가져오기를 하면 빈 칸으로 다시 생깁니다.' : ''))) return;
       delete db[kind][id]; save(); render();
     } }, '빼기');
   }
-  function exportMaster() {
-    var wb = XLSX.utils.book_new(), m = L.masterToAoa(db.presses, db.dies);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(m.presses), '설비 기준표');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(m.dies), '금형 기준표');
-    XLSX.writeFile(wb, '설비_금형_기준표.xlsx');
-  }
   function rulesCard() {
     var r = L.cleanRules(db.rules);
     var defs = [
-      ['avgDays', '예정일 추정에 쓸 최근 일수', 1, 1], ['warnPct', '수명·주기 「주의」 기준 (%)', 100, 1], ['alertDays', '예정일이 며칠 안이면 「주의」', 1, 1],
       ['recentDays', '이상 감지 — 최근 구간(일)', 1, 1], ['baseDays', '이상 감지 — 기준선 구간(일)', 1, 1], ['minBase', '기준선에 필요한 최소 가동일', 1, 1],
       ['k', '관리한계 k (σ 배수)', 1, 0.5], ['kWarn', '주의 한계 (σ 배수)', 1, 0.5], ['persist', '연속 가동일 수(지속 조건)', 1, 1], ['spikes', '연속 아니어도 관리한계 밖 며칠이면 「주의」', 1, 1]];
     var inputs = {};
@@ -1609,7 +1639,7 @@
       h('div', { class: 'form-grid', style: 'margin-top:12px' }, fld('기준선 계산', method), h('div', { class: 'field span-all' }, h('span', null, '살펴볼 채널'), h('div', { class: 'opt-grid' }, chBoxes.map(function (c) { return c.label; })))),
       h('div', { class: 'btn-row', style: 'margin-top:10px' },
         h('button', { type: 'button', class: 'btn btn-primary', onclick: function () {
-          var p = { method: method.value, channels: {} };
+          var p = Object.assign({}, db.rules, { method: method.value, channels: {} }); // 화면에서 뺀 칸(수명 · 주기)의 옛 값은 그대로
           Object.keys(inputs).forEach(function (k) { p[k] = Number(inputs[k].el.value) / inputs[k].mul; });
           chBoxes.forEach(function (c) { p.channels[c.id] = c.el.checked; });
           db.rules = L.cleanRules(p); save(); toast('판정 기준을 바꿨습니다.'); render();
@@ -1619,21 +1649,20 @@
 
   /* ── 라우터 ─────────────────────────────── */
   var PAGES = [
-    { id: 'dash', no: '홈', t: '대시보드', s: '프레스 상태·금형 수명', fn: pageDash },
+    { id: 'dash', no: '홈', t: '대시보드', s: '프레스 정상 / 이상 상태', fn: pageDash },
     { id: 'spc', no: '실', t: '실시간 관리도', s: '2초 센서 ±3σ·온도 3구간', fn: pageSpc },
     { id: 'live', no: '연', t: '실시간 연결', s: '시뮬레이터·HTTP·WebSocket', fn: pageLive },
     { id: 'lead', no: '이', t: '고장 전 이탈', s: '이력 맞춰 보기·리드타임', fn: pageLead },
     { id: 'import', no: '0', t: '데이터 가져오기', s: '로그 엑셀·CSV 여러 개', fn: pageImport },
-    { id: 'die', no: '①', t: '금형 타수·교체', s: '수명 사용률·교체 예정일', fn: pageDie },
-    { id: 'overhaul', no: '②', t: '오버홀 알림', s: '타수·일수 주기', fn: pageOverhaul },
-    { id: 'anomaly', no: '③', t: '이상 감지', s: '전류·온도·진동·전압', fn: pageAnomaly },
-    { id: 'report', no: '④', t: '월별 타수 보고서', s: '프레스 종류별·엑셀·인쇄', fn: pageReport },
-    { id: 'ai', no: '⑤', t: 'AI 분석', s: '사실만 담은 프롬프트', fn: pageAi },
+    { id: 'anomaly', no: '①', t: '이상 감지', s: '전류·온도·진동·전압', fn: pageAnomaly },
+    { id: 'ml', no: '②', t: '머신러닝 · 라벨링', s: '고장 이력으로 정상/이상 라벨', fn: pageMl },
+    { id: 'ai', no: '③', t: 'AI 분석', s: '사실만 담은 프롬프트', fn: pageAi },
     { id: 'settings', no: '설', t: '설정', s: '기준표·판정 기준·백업', fn: pageSettings }
   ];
   function route() { var id = (location.hash || '').replace(/^#\//, '').split('?')[0]; return PAGES.filter(function (p) { return p.id === id; })[0] || (db.records.length ? PAGES[0] : PAGES.filter(function (p) { return p.id === 'import'; })[0]); }
   function render() {
     var p = route();
+    db.ml = LB.cleanState(db.ml); // 옛 자료(칸 없음)는 기본값
     A = L.analyze(db);
     document.body.setAttribute('data-route', p.id);
     var nav = document.getElementById('nav'); nav.innerHTML = '';
@@ -1644,19 +1673,19 @@
       nav.appendChild(h('a', { href: '#/' + x.id, 'aria-current': x === p ? 'page' : null }, h('span', { class: 'no' }, x.no), h('span', { class: 't' }, x.t, badge), h('span', { class: 's' }, x.s)));
     });
     document.getElementById('dataChip').textContent = db.records.length
-      ? '기준일 ' + A.asOf + ' · 프레스 ' + A.statuses.length + '대 · 금형 ' + A.dies.length + '개 · 로그 ' + L.fmtN(db.records.length) + '행'
+      ? '기준일 ' + A.asOf + ' · 프레스 ' + A.statuses.length + '대 · 로그 ' + L.fmtN(db.records.length) + '행'
       : '데이터 없음';
     if (rawRows()) document.getElementById('dataChip').textContent += ' · 2초 로그 ' + L.fmtN(rawRows()) + '행';
     if (liveRunning()) document.getElementById('dataChip').textContent += ' · 실시간 연결 중';
     var b = document.getElementById('sampleBanner');
     b.hidden = !db.sample;
-    if (db.sampleKind === 'virtual') b.textContent = '지금 보시는 것은 가상 더미 데이터입니다(수강생 결정 10-27 — 실제 로그·고장 이력 대신). 프레스 P1~P3 × 10/19~10/23, 08~12시·13~17시 2초 로그와 고장 3건(P2 10/21 16:10 과열 정지 · P1 10/22 14:20 베어링 손상 · P3 10/23 11:10 금형 균열)·정비 3건·금형 교체 2건 이력을 지어 넣었습니다. 「고장 전 이탈」에서 경보가 고장보다 몇 시간 먼저 나타났는지 봅니다.';
+    if (db.sampleKind === 'virtual') b.textContent = '지금 보시는 것은 가상 더미 데이터입니다(수강생 결정 10-27 — 실제 로그·고장 이력 대신). 프레스 P1~P3 × 10/19~10/23, 08~12시·13~17시 2초 로그와 고장 3건(P2 10/21 16:10 과열 정지 · P1 10/22 14:20 베어링 손상 · P3 10/23 11:10 금형 균열)·정비 3건·금형 교체 2건 이력을 지어 넣었습니다. 「고장 전 이탈」에서 경보가 고장보다 몇 시간 먼저 나타났는지, 「머신러닝 · 라벨링」에서 같은 고장 3건(정비 · 고장 이력 V-0001~0003)으로 붙인 정상 / 이상 라벨을 봅니다.';
     else if (db.sampleKind === 'raw') b.textContent = '지금 보시는 것은 2초 로그 가상 샘플입니다(프레스 P1~P4 × 10/19~10/21, 08~12시·13~17시). P2 10/21 오후 전류·온도 상승, P3 10/20 10:00 20분 정지와 10/21 14시대 진동 튐, P4 10/20 13:00 금형 M-07→M-08 교체, P4 10/21 오후 전압 조금 내려앉음(연속 9점 규칙으로 보임), P1 10/20 15:10 기록 끊김을 심어 두었습니다. 3일치라 일 단위 이상 감지는 「비교 못 함」으로 나옵니다.';
-    else b.textContent = '지금 보시는 것은 가상 샘플입니다(프레스 P1~P4 × 90일, 금형 M-01~M-08). 금형 M-05 수명 임박, P2 전류·온도 상승(마지막 2주), P4 오버홀 주기 지남을 일부러 심어 두었습니다. 실제 로그를 넣기 전에 「데이터 가져오기 → 모든 데이터 지우기」를 해 주세요.';
+    else b.textContent = '지금 보시는 것은 가상 샘플입니다(프레스 P1~P4 × 90일). P2 전류·온도 상승(마지막 2주)을 일부러 심어 두었습니다. 실제 로그를 넣기 전에 「데이터 가져오기 → 모든 데이터 지우기」를 해 주세요.';
     main.innerHTML = '';
     add(main, p.fn());
     if (p.id === 'live') liveRefresh();
-    document.title = p.t + ' — 프레스·금형 예지보전';
+    document.title = p.t + ' — 프레스 예지보전';
     save();
   }
   window.addEventListener('hashchange', function () { render(); main.focus(); window.scrollTo(0, 0); });

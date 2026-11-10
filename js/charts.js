@@ -200,6 +200,13 @@
         svg.appendChild(el('text', { x: padL + 6, y: Math.min(y2 - 4, y1 + 14), class: 'tick zone-label' }, b[3]));
       });
     }
+    (opts.bands || []).forEach(function (b) { // v2.1 라벨 구간(이상 · 제외 · 수동) — 세로 띠
+      if (!(b.to >= x0 && b.from <= x1)) return;
+      var a = Math.max(padL, X(b.from)), c = Math.min(padL + plotW, X(b.to));
+      var r = el('rect', { x: a, y: padT, width: Math.max(1.5, c - a), height: plotH, class: 'lband ' + (b.cls || '') });
+      r.appendChild(el('title', null, stamp(b.from) + ' ~ ' + stamp(b.to) + ' ' + (b.title || '')));
+      svg.appendChild(r);
+    });
     if (opts.base && isFinite(opts.base.from) && opts.base.to >= x0 && opts.base.from <= x1 && !opts.noBase) {
       var bx = Math.max(padL, X(opts.base.from)), bx2 = Math.min(padL + plotW, X(opts.base.to));
       svg.appendChild(el('rect', { x: bx, y: padT, width: Math.max(2, bx2 - bx), height: plotH, class: 'base-zone' }));
@@ -277,8 +284,9 @@
     lg.innerHTML = '<span class="lg"><i style="background:' + (opts.color || 'var(--series-1)') + '"></i>' + (opts.ds.raw ? '측정값' : '측정값(칸 평균 · 옅은 세로줄 = 칸 최소~최대)') + '</span>' +
       (opts.lim ? '<span class="lg"><i class="sw-center"></i>중심선</span><span class="lg"><i class="sw-lim"></i>±3σ 관리선</span>' + (opts.warn ? '<span class="lg"><i class="sw-warn"></i>±2σ 경고선</span>' : '') : '') +
       (opts.zones ? '<span class="lg"><i class="sw-zwarm"></i>예열</span><span class="lg"><i class="sw-zstable"></i>안정 생산</span><span class="lg"><i class="sw-zdanger"></i>위험</span>' : '') +
-      '<span class="lg"><i class="sw-bad"></i>' + (opts.zones ? '위험 구간 점' : '이탈점') + '</span>' + (opts.noBase || opts.zones ? '' : '<span class="lg"><i class="sw-zone"></i>기준 구간</span>') +
-      (opts.marks && opts.marks.length ? '<span class="lg"><i class="sw-mark"></i>고장·정비 이력</span>' : '');
+      (opts.noViol ? '' : '<span class="lg"><i class="sw-bad"></i>' + (opts.zones ? '위험 구간 점' : '이탈점') + '</span>') + (opts.noBase || opts.zones ? '' : '<span class="lg"><i class="sw-zone"></i>기준 구간</span>') +
+      (opts.marks && opts.marks.length ? '<span class="lg"><i class="sw-mark"></i>고장·정비 이력</span>' : '') +
+      (opts.bandLegend ? '<span class="lg"><i class="sw-labn"></i>이상</span><span class="lg"><i class="sw-lexc"></i>제외</span><span class="lg"><i class="sw-lman"></i>수동 라벨(테두리)</span>' : '');
     f.appendChild(lg);
     f.appendChild(spcChart(opts));
     return f;

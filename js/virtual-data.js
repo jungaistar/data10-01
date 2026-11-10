@@ -62,6 +62,13 @@
     { at: '2026-10-23 11:10:00', press: 'P3', kind: '고장', part: '금형 M-06 균열', note: '제품 버(burr) 발생으로 발견, 생산 중지', downMin: 30 },
     { at: '2026-10-23 11:40:00', press: 'P3', kind: '금형 교체', part: '금형 M-06 → M-09', note: '균열 금형 교체(고장 교체)', downMin: 0 }
   ];
+  /* 정비 · 고장 이력(maintenance_log 형식, v2.1 라벨링용) — 위 고장 3건과 같은 사건. 값은 모두 지어낸 것 */
+  var MLOG = [
+    { log_id: 'V-0001', equipment_id: 'P2', found_at: '2026-10-21 16:10:00', fixed_at: '2026-10-22 07:30:00', symptom: '유압유 온도 높음 알람 · 정지', failure_part: '오일쿨러', cause: '냉각 핀 막힘', action: '오일쿨러 청소 · 냉각팬 교체' },
+    { log_id: 'V-0002', equipment_id: 'P1', found_at: '2026-10-22 14:20:00', fixed_at: '2026-10-23 07:40:00', symptom: '이음 · 진동 커짐', failure_part: '주축 베어링', cause: '윤활 부족', action: '베어링 교체' },
+    { log_id: 'V-0003', equipment_id: 'P3', found_at: '2026-10-23 11:10:00', fixed_at: '2026-10-23 11:40:00', symptom: '제품 버(burr) 발생', failure_part: '금형', cause: '금형 피로 균열', action: '금형 교체' }
+  ];
+  function mlog() { return MLOG.map(function (e) { var o = {}; for (var k in e) o[k] = e[k]; o.virtual = true; return o; }); }
   function events() { return EVENTS.map(function (e, i) { var o = {}; for (var k in e) o[k] = e[k]; o.id = 'v' + (i + 1); o.virtual = true; return o; }); }
 
   /* ── 프레스 모델 ──────────────────────────────────────── */
@@ -203,6 +210,6 @@
     };
   }
 
-  return { HEAD: HEAD, LABEL: LABEL, PRESSES: PRESSES, DAYS: DAYS, SESSIONS: SESSIONS, EVENTS: EVENTS, FAULTS: FAULTS, AMB: AMB,
+  return { HEAD: HEAD, LABEL: LABEL, PRESSES: PRESSES, DAYS: DAYS, SESSIONS: SESSIONS, EVENTS: EVENTS, MLOG: MLOG, mlog: mlog, FAULTS: FAULTS, AMB: AMB,
     events: events, createModel: createModel, createSimulator: createSimulator, build: build, cells: cells, toJson: toJson, sec: sec, stamp: stamp, wallNow: wallNow, opSec: opSec };
 });

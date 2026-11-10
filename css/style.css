@@ -480,3 +480,24 @@ ul.alarm-list li { padding: 6px 10px; border-left: 4px solid var(--lv-bad); back
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86em; background: #eef1f5; padding: 1px 5px; border-radius: 4px; word-break: break-all; }
 @media (max-width: 900px) { .live-status { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .live-status { grid-template-columns: minmax(0, 1fr); } }
+/* v2.1 — 머신러닝 · 라벨링 */
+svg.chart .lband { stroke: none; }
+svg.chart .lband-abnormal { fill: #f6c9c4; opacity: .55; }
+svg.chart .lband-exclude { fill: #c9d1dc; opacity: .6; }
+svg.chart .lband-normal.lband-manual { fill: #cfe9d8; opacity: .55; }
+svg.chart .lband-manual { stroke: #3d4753; stroke-width: 1; stroke-dasharray: 3 2; }
+.legend .sw-labn { background: #f6c9c4; border: 1px solid #e59a91; }
+.legend .sw-lexc { background: #c9d1dc; border: 1px solid #9aa7b8; }
+.legend .sw-lman { background: transparent; border: 1px dashed #3d4753; }
+.pill.lab-0 { background: #e8f5ec; color: var(--ok); border-color: #b5dcc3; }
+.pill.lab-1 { background: #fdeceb; color: var(--danger); border-color: #f2b8b2; }
+.pill.lab-2 { background: #eef1f5; color: var(--muted); border-color: #c9d1dc; }
+.pill.src-manual { background: #fff; color: #3d4753; border: 1px dashed #3d4753; }
+.cm-table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.cm-table th, .cm-table td { border: 1px solid var(--line); padding: 8px 12px; text-align: center; }
+.cm-table td.hit { background: #e8f5ec; font-weight: 800; }
+.cm-table td.miss { background: #fdeceb; font-weight: 800; }
+.ml-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 14px; }
+.ml-form .span-2 { grid-column: span 2; }
+@media (max-width: 1100px) { .ml-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .ml-form { grid-template-columns: minmax(0, 1fr); } .ml-form .span-2 { grid-column: auto; } }

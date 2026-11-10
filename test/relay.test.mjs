@@ -60,7 +60,7 @@ await test('OPTIONS 미리 묻기 204 · 고장 징후 넣기 · 상태', async 
 });
 await test('페이지 — index.html(HEAD 에 Last-Modified, fresh-guard 용) · 폴더 밖·.git 은 막음', async () => {
   const g = await fetch(base + '/');
-  assert.equal(g.status, 200); assert.ok(/프레스·금형 예지보전/.test(await g.text()));
+  assert.equal(g.status, 200); assert.ok(/프레스 예지보전/.test(await g.text()));
   const hd = await fetch(base + '/index.html', { method: 'HEAD' });
   assert.equal(hd.status, 200); assert.ok(hd.headers.get('last-modified'));
   assert.equal((await fetch(base + '/js/live.js')).headers.get('content-type'), 'text/javascript; charset=utf-8');

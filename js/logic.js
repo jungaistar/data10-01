@@ -666,7 +666,8 @@
     var R = cleanRules(ctx.rules), asOf = ctx.asOf;
     var recentFrom = addDays(asOf, -R.recentDays + 1);
     var dieById = {}; (ctx.dies || []).forEach(function (d) { dieById[d.id] = d; });
-    var ids = uniq((ctx.overhauls || []).map(function (o) { return o.id; }).concat((ctx.anomalies || []).map(function (a) { return a.press; }))).sort(natCmp);
+    // v2.1 — 금형 타수 · 오버홀은 화면에서 뺐습니다(analyze 가 넘기지 않음). 넘기면 예전처럼 근거에 더합니다(되살릴 때)
+    var ids = uniq((ctx.overhauls || []).map(function (o) { return o.id; }).concat((ctx.anomalies || []).map(function (a) { return a.press; })).concat((ctx.rows || []).map(function (r) { return r.press; }))).sort(natCmp);
     return ids.map(function (id) {
       var reasons = [];
       var oh = (ctx.overhauls || []).filter(function (o) { return o.id === id; })[0];
@@ -681,7 +682,9 @@
       var last = mine.slice(-1)[0];
       var lastDays = daily(mine).slice(-1)[0];
       var stroke7 = windowSum(mine, function () { return true; }, asOf, 7);
-      return { id: id, type: oh ? oh.type : '', level: worst(levels), reasons: reasons, dies: recentDies, lastDate: last ? last.date : '', lastDay: lastDays || null,
+      var typ = oh ? oh.type : ctx.presses ? pressTypeOf(ctx.presses, id, last ? last.pressType : '') : '';
+      if (typ === '(종류 없음)') typ = '';
+      return { id: id, type: typ, level: worst(levels), reasons: reasons, dies: recentDies, lastDate: last ? last.date : '', lastDay: lastDays || null,
         strokes7: stroke7, sensors: an, overhaul: oh || null };
     });
   }
@@ -790,10 +793,11 @@
     L.push('');
     L.push('[사실]');
     L.push('- 기준일(로그 마지막 날): ' + ctx.asOf + ' · 로그 기간 ' + ctx.range.first + ' ~ ' + ctx.range.last);
-    L.push('- 판정 기준: ' + ruleText(R) + ' · 수명·오버홀은 ' + Math.round(R.warnPct * 100) + '% 또는 예정일 ' + R.alertDays + '일 안이면 주의, 100% 면 점검 필요 · 예정일은 최근 ' + R.avgDays + '일 일평균 타수로 추정');
+    var old = !!(ctx.dies || ctx.overhauls); // v2.1 — 금형 · 오버홀을 넘기지 않으면 그 줄을 쓰지 않음
+    L.push('- 판정 기준: ' + ruleText(R) + (old ? ' · 수명·오버홀은 ' + Math.round(R.warnPct * 100) + '% 또는 예정일 ' + R.alertDays + '일 안이면 주의, 100% 면 점검 필요 · 예정일은 최근 ' + R.avgDays + '일 일평균 타수로 추정' : ''));
     L.push('- 프레스별 상태:');
     (ctx.statuses || []).forEach(function (s) {
-      L.push('  · ' + P(s.id) + (s.type ? '(' + s.type + ')' : '') + ': ' + LEVELS[s.level] + ' — 최근 7일 타수 ' + fmtN(s.strokes7) + (s.dies.length ? ', 최근 쓴 금형 ' + s.dies.map(D).join('·') : ''));
+      L.push('  · ' + P(s.id) + (s.type ? '(' + s.type + ')' : '') + ': ' + LEVELS[s.level] + (old ? ' — 최근 7일 타수 ' + fmtN(s.strokes7) + (s.dies.length ? ', 최근 쓴 금형 ' + s.dies.map(D).join('·') : '') : ''));
       s.reasons.forEach(function (r) {
         var t = r.text;
         if (al) { t = t.replace(/금형 (\S+) — /, function (all, d) { return '금형 ' + D(d) + ' — '; }); }
@@ -809,14 +813,14 @@
     if (!bad.length) L.push('  (기준을 넘은 채널 없음)');
     var nob = (ctx.anomalies || []).filter(function (a) { return a.level === 'nobase'; });
     if (nob.length) L.push('- 기준선이 짧아 비교 못 한 채널: ' + nob.map(function (a) { return P(a.press) + ' ' + a.label; }).join(', '));
-    L.push('- 금형 수명 (사용률 높은 순):');
+    if (ctx.dies) L.push('- 금형 수명 (사용률 높은 순):');
     (ctx.dies || []).filter(function (d) { return d.life; }).slice().sort(function (a, b) { return b.ratio - a.ratio; }).forEach(function (d) {
       L.push('  · ' + D(d.id) + ' [' + LEVELS[d.level] + ']: 사용 ' + fmtN(d.used) + ' / 기준 ' + fmtN(d.life) + '타(' + pctText(d.ratio) + '), 일평균 ' + fmtN(d.avgPerDay) + '타' +
         (d.dueDate ? ', 교체 예정 ' + d.dueDate : '') + (d.presses.length ? ', 쓴 프레스 ' + d.presses.map(P).join('·') : ''));
     });
     var noLife = (ctx.dies || []).filter(function (d) { return !d.life; });
     if (noLife.length) L.push('  · 수명 기준이 없는 금형 ' + noLife.length + '개: ' + noLife.map(function (d) { return D(d.id); }).join(', '));
-    L.push('- 오버홀:');
+    if (ctx.overhauls) L.push('- 오버홀:');
     (ctx.overhauls || []).forEach(function (o) {
       L.push('  · ' + P(o.id) + ' [' + LEVELS[o.level] + ']: ' + (o.level === 'none' ? o.reason : o.reason + (o.lastOH ? ' (마지막 오버홀 ' + o.lastOH + ')' : '')));
     });
@@ -828,8 +832,8 @@
     L.push('1. 오늘 기준 한 줄 요약');
     L.push('2. 프레스별로 먼저 확인할 것 (점검 필요 → 주의 순서, 근거 숫자를 그대로 인용)');
     L.push('3. 전류·온도가 함께 오르는 경우처럼 채널을 묶어 볼 때 의심할 수 있는 점검 항목 (「추정」 표시, 2~3개씩)');
-    L.push('4. 다음 2주 정비 일정 제안 (금형 교체·오버홀 예정일 기준, 생산 영향이 적은 순서)');
-    L.push('5. 예지 정확도를 높이려면 더 모아야 할 기록 (고장·교체 이력 등)');
+    if (old) L.push('4. 다음 2주 정비 일정 제안 (금형 교체·오버홀 예정일 기준, 생산 영향이 적은 순서)');
+    L.push((old ? '5' : '4') + '. 예지 정확도를 높이려면 더 모아야 할 기록 (고장·정비 이력과 라벨 등)');
     var text = L.join('\n');
     var names = al ? Object.keys(al.press).concat(Object.keys(al.die)) : [];
     return { prompt: text, map: used, leaks: al ? findLeaks(text, names) : [] };
@@ -837,7 +841,7 @@
 
   /* ── 15. 저장 형식 ─────────────────────────────────────────── */
   function emptyDb() {
-    return { schemaVersion: SCHEMA_VERSION, records: [], files: [], presses: {}, dies: {}, rules: cleanRules({}), aiNotes: {}, aliases: { press: {}, die: {} }, maskNames: true, sample: false, spc: {}, rawFiles: [], events: [], zones: {}, pdm: {}, live: {} };
+    return { schemaVersion: SCHEMA_VERSION, records: [], files: [], presses: {}, dies: {}, rules: cleanRules({}), aiNotes: {}, aliases: { press: {}, die: {} }, maskNames: true, sample: false, spc: {}, rawFiles: [], events: [], zones: {}, pdm: {}, live: {}, ml: {} };
   }
   function restoreDb(o) {
     var db = emptyDb();
@@ -862,6 +866,8 @@
     if (o.zones && typeof o.zones === 'object') Object.keys(o.zones).forEach(function (k) { var z = o.zones[k]; if (z && isFinite(z.warmTop) && isFinite(z.dangerAt)) db.zones[k] = { warmTop: +z.warmTop, dangerAt: +z.dangerAt, holdSec: isFinite(z.holdSec) ? +z.holdSec : 30 }; });
     if (o.pdm && typeof o.pdm === 'object') db.pdm = o.pdm;
     if (o.live && typeof o.live === 'object') db.live = o.live;
+    // v2.1 — 머신러닝 · 라벨링(정비 · 고장 이력, 라벨 규칙, 수동 라벨). 정리는 js/label.js cleanState
+    if (o.ml && typeof o.ml === 'object') db.ml = o.ml;
     return db;
   }
 
@@ -870,11 +876,11 @@
     var R = cleanRules(db.rules);
     var d = deriveStrokes(db.records);
     var range = dataRange(db.records), asOf = range.last;
-    var dies = dieStatus(d.rows, db.dies, { rules: R, asOf: asOf });
-    var overhauls = overhaulStatus(d.rows, db.presses, { rules: R, asOf: asOf });
+    // v2.1(2026-11-10 요청) — 금형 타수 · 교체주기 · 오버홀 알림은 기능에서 뺐습니다. 프레스 상태 = 전류 · 전압 · 온도 · 진동 이상 감지만.
+    // 저장된 금형 · 오버홀 기준표(db.dies · db.presses 의 주기 칸)는 지우지 않고 읽기만 하지 않습니다. dieStatus · overhaulStatus 함수는 되살릴 때를 위해 둡니다.
     var anomalies = detectAll(d.rows, { rules: R, asOf: asOf });
-    var statuses = pressStatus({ rules: R, asOf: asOf, rows: d.rows, dies: dies, overhauls: overhauls, anomalies: anomalies });
-    return { rules: R, rows: d.rows, strokeStat: d.stat, range: range, asOf: asOf, dies: dies, overhauls: overhauls, anomalies: anomalies, statuses: statuses };
+    var statuses = pressStatus({ rules: R, asOf: asOf, rows: d.rows, presses: db.presses, anomalies: anomalies });
+    return { rules: R, rows: d.rows, strokeStat: d.stat, range: range, asOf: asOf, anomalies: anomalies, statuses: statuses };
   }
 
   return {

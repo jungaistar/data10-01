@@ -222,29 +222,43 @@ let recs = [];
 for (const f of S.files) recs = L.mergeRecords(recs, L.parseSheet(f.aoa, { fileName: f.fileName }).records).records;
 const db = L.emptyDb(); db.records = recs; db.presses = S.master.presses; db.dies = S.master.dies;
 const A = L.analyze(db);
+// v2.1 — 금형 · 오버홀은 analyze 에서 뺐으나 함수는 되살릴 때를 위해 남김 — 여기서 직접 불러 시험
+const DIES = L.dieStatus(A.rows, db.dies, { rules: A.rules, asOf: A.asOf }), OHS = L.overhaulStatus(A.rows, db.presses, { rules: A.rules, asOf: A.asOf });
 test('파일 4개(7~10월) → 4대 × 90일 중 일요일 뺀 308행, 기준일 10-17', () => {
   assert.equal(S.files.length, 4); assert.equal(S.files[3].kind, 'csv');
   assert.equal(recs.length, 308); assert.equal(A.asOf, '2026-10-17');
   assert.equal(A.strokeStat.fromRow, 308); assert.equal(A.strokeStat.mismatch, 0); // 금형 타수 합 = 프레스 누적 차이
 });
 test('① 금형 M-05 — 수명 약 95%, 교체 예정 14일 안 → 주의 (다른 금형은 정상)', () => {
-  const m5 = A.dies.find(d => d.id === 'M-05');
+  const m5 = DIES.find(d => d.id === 'M-05');
   assert.equal(m5.level, 'warn'); near(m5.ratio, 0.95, 0.002); assert.ok(m5.daysLeft <= 14);
-  assert.deepEqual(A.dies.filter(d => d.level !== 'ok').map(d => d.id), ['M-05']);
+  assert.deepEqual(DIES.filter(d => d.level !== 'ok').map(d => d.id), ['M-05']);
 });
 test('② P2 — 전류·온도가 함께 점검 필요(오름), 다른 프레스·채널은 정상', () => {
   const bad = A.anomalies.filter(a => a.level !== 'ok').map(a => a.press + ':' + a.channel + ':' + a.level + ':' + a.direction).sort();
   assert.deepEqual(bad, ['P2:current:bad:up', 'P2:temp:bad:up']);
 });
 test('③ P4 — 오버홀 일수 주기(180일) 지남 → 점검 필요', () => {
-  const o = A.overhauls.find(x => x.id === 'P4');
+  const o = OHS.find(x => x.id === 'P4');
   assert.equal(o.level, 'bad'); assert.equal(o.basis, '일수'); assert.equal(o.dueDate, '2026-09-23');
-  assert.deepEqual(A.overhauls.filter(x => x.level !== 'ok').map(x => x.id), ['P4']);
+  assert.deepEqual(OHS.filter(x => x.level !== 'ok').map(x => x.id), ['P4']);
 });
-test('프레스 종합 — P1 정상 · P2 점검 필요 · P3 주의(금형) · P4 점검 필요(오버홀)', () => {
-  assert.deepEqual(A.statuses.map(s => s.id + ':' + s.level), ['P1:ok', 'P2:bad', 'P3:warn', 'P4:bad']);
-  assert.equal(A.statuses[2].reasons[0].kind, 'die');
+test('프레스 종합(v2.1 센서만) — P2 만 점검 필요, 금형 · 오버홀은 상태 근거에서 빠짐 · analyze 에 dies · overhauls 없음', () => {
+  assert.deepEqual(A.statuses.map(s => s.id + ':' + s.level), ['P1:ok', 'P2:bad', 'P3:ok', 'P4:ok']);
+  assert.ok(A.statuses.every(s => s.reasons.every(r => r.kind === 'sensor')));
   assert.ok(A.statuses[1].reasons[0].short.includes('평소'));
+  assert.equal(A.dies, undefined); assert.equal(A.overhauls, undefined);
+  assert.ok(A.statuses[0].type, '기준표의 종류');
+  // 되살릴 때 — 넘기면 예전처럼 금형 · 오버홀 근거가 붙음
+  const old = L.pressStatus({ rules: A.rules, asOf: A.asOf, rows: A.rows, dies: DIES, overhauls: OHS, anomalies: A.anomalies });
+  assert.deepEqual(old.map(s => s.id + ':' + s.level), ['P1:ok', 'P2:bad', 'P3:warn', 'P4:bad']);
+  assert.equal(old[2].reasons[0].kind, 'die');
+});
+test('옛 저장 자료 — 금형 · 오버홀 기준표와 판정 기준 칸은 지우지 않고 그대로 읽힘(화면만 안 씀)', () => {
+  const back = L.restoreDb(JSON.parse(JSON.stringify(db)));
+  assert.deepEqual(Object.keys(back.dies).sort(), Object.keys(db.dies).sort());
+  assert.equal(back.presses.P4.ohDays, db.presses.P4.ohDays);
+  assert.deepEqual(back.ml, {}); // 라벨 칸이 없는 옛 자료 → 빈 값(label.js cleanState 가 기본값)
 });
 
 console.log('월별 보고서');
@@ -268,8 +282,8 @@ test('한 달 자세히 — 종류·프레스·금형 합이 서로 같음, 기�
 
 console.log('AI 프롬프트 · 이름 가리기');
 function promptWith(mask) {
-  const aliases = { press: L.assignAliases({}, Object.keys(db.presses), L.ALIAS.press), die: L.assignAliases({}, A.dies.map(d => d.id), L.ALIAS.die) };
-  return { aliases, info: L.buildAiPromptInfo({ asOf: A.asOf, range: A.range, rules: A.rules, statuses: A.statuses, anomalies: A.anomalies, dies: A.dies, overhauls: A.overhauls,
+  const aliases = { press: L.assignAliases({}, Object.keys(db.presses), L.ALIAS.press), die: L.assignAliases({}, DIES.map(d => d.id), L.ALIAS.die) };
+  return { aliases, info: L.buildAiPromptInfo({ asOf: A.asOf, range: A.range, rules: A.rules, statuses: A.statuses, anomalies: A.anomalies, dies: DIES, overhauls: OHS,
     month: L.monthDetail(A.rows, db.presses, '2026-10'), aliases: mask ? aliases : null }) };
 }
 test('사실만 — 심어 둔 세 가지의 근거 숫자가 프롬프트에 들어감', () => {
@@ -283,6 +297,12 @@ test('가리기 — 실제 프레스·금형 이름이 남지 않고, 답의 별
   for (const n of ['P1', 'P2', 'P3', 'P4', 'M-01', 'M-05']) assert.ok(!new RegExp('(^|[^0-9A-Za-z가-힣])' + n + '(?![0-9A-Za-z])').test(info.prompt), n + ' 이 남음');
   assert.equal(aliases.press.P2, '설비2'); assert.equal(aliases.die['M-05'], '금형5');
   assert.equal(L.unmaskText('설비2 전류 확인, 금형5 교체. 설비 3대·금형2개', aliases), 'P2 전류 확인, M-05 교체. 설비 3대·금형2개');
+});
+test('v2.1 화면의 프롬프트(금형 · 오버홀 안 넘김) — 금형 수명 · 오버홀 · 정비 일정 줄이 없고 센서 사실은 그대로', () => {
+  const p = L.buildAiPromptInfo({ asOf: A.asOf, range: A.range, rules: A.rules, statuses: A.statuses, anomalies: A.anomalies, aliases: null }).prompt;
+  assert.ok(p.includes('P2 전류 [점검 필요]'));
+  for (const w of ['금형 수명', '오버홀', '최근 7일 타수', '정비 일정']) assert.ok(!p.includes(w), w + ' 이 남음');
+  assert.ok(p.includes('4. 예지 정확도'));
 });
 test('안전망 — 가린 뒤에도 남은 이름을 찾음 (일부러 넣어 봄)', () => {
   assert.deepEqual(L.findLeaks('설비1 과 P3 를 비교', ['P1', 'P3', 'M-01']), ['P3']);
