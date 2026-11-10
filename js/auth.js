@@ -74,6 +74,7 @@
       '<p class="ag-foot">가입 → 사용 신청 → 관리자 승인 뒤에 쓸 수 있습니다 · 업무 자료는 서버로 보내지 않고 이 브라우저에 저장합니다</p>';
   }
   function show(right) {
+    gate.classList.remove('ag-home');
     root.classList.add('auth-lock'); gate.hidden = false; gate.innerHTML = shell(right); gate.scrollTop = 0; fx();
     var bn = gate.querySelector('.ag-banner');
     if (bn) bn.onclick = function (e) {
@@ -154,10 +155,154 @@
     return m;
   }
 
+
+  // ───────── 홈페이지 모드(로그인 전) ─────────
+  // 회사 홈페이지처럼: 머리글(회사 로고 · 메뉴 · 로그인) → 히어로 → 목표 → 기능 → 사용 순서 → 실제 화면 → 믿을 수 있는 이유 → 권유 띠 → 꼬리말.
+  // 로그인 · 회원가입 카드는 창(모달)으로 연다. 내용은 plan.json(apply-auth-kit 이 auth-config 로 옮김)에서 온다.
+  function homeOn() { return !!S.home && LD.home !== false; }
+  var ICON = {
+    upload: 'M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M4 15v4a1 1 0 001 1h14a1 1 0 001-1v-4',
+    chart: 'M4 20h16M7 16v-5m5 5V7m5 9v-8',
+    doc: 'M7 3h7l5 5v12a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1zm7 0v5h5M9 13h7M9 17h5',
+    clock: 'M12 7v5l3.5 2M12 21a9 9 0 100-18 9 9 0 000 18z',
+    check: 'M9 12.5l2.2 2.2L15.5 10M12 21a9 9 0 100-18 9 9 0 000 18z',
+    camera: 'M4 8.5A1.5 1.5 0 015.5 7H8l1.5-2h5L16 7h2.5A1.5 1.5 0 0120 8.5v9a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 17.5zM12 16a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4z',
+    bell: 'M6.5 16.5V11a5.5 5.5 0 0111 0v5.5l1.5 1.5H5zM10 20.5a2 2 0 004 0',
+    spark: 'M12 3.5l1.9 5 5 1.9-5 1.9-1.9 5-1.9-5-5-1.9 5-1.9zM18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z',
+    search: 'M10.5 17.5a7 7 0 100-14 7 7 0 000 14zM15.5 15.5L21 21',
+    shield: 'M12 3l7.5 3v5.5c0 4.6-3.2 8-7.5 9.5-4.3-1.5-7.5-4.9-7.5-9.5V6zM9 12l2 2 4-4',
+    folder: 'M3.5 7.5A1.5 1.5 0 015 6h4.5l2 2H19a1.5 1.5 0 011.5 1.5v8A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5z',
+    move: 'M5 12h13m0 0l-4.5-4.5M18 12l-4.5 4.5M5 5v14',
+    users: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm-6 9a6 6 0 0112 0M16 4.5a3.5 3.5 0 010 6.8M18 14.5a6 6 0 013 5.5',
+    layers: 'M12 3.5l8.5 4.5-8.5 4.5L3.5 8zM3.5 12.5l8.5 4.5 8.5-4.5M3.5 16.5L12 21l8.5-4.5',
+    target: 'M12 21a9 9 0 100-18 9 9 0 000 18zm0-4.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zm0-3.5a1 1 0 100-2 1 1 0 000 2z',
+    arrow: 'M5 12h14m0 0l-5-5m5 5l-5 5'
+  };
+  function icon(n, cls) { return '<svg class="' + (cls || 'hp-ic') + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="' + (ICON[n] || ICON.layers) + '"/></svg>'; }
+  function iconFor(t) {
+    t = String(t || '');
+    if (/AI|초안|요약|프롬프트|추천|예측|머신러닝|라벨/.test(t)) return 'spark';
+    if (/엑셀|가져오기|등록|올리|업로드|넣기|수집/.test(t)) return 'upload';
+    if (/그래프|분석|BI|추이|대시보드|관리도|통계|달성률|파레토|병목/.test(t)) return 'chart';
+    if (/PDF|문서|보고서|기획서|양식|합의서|인보이스|내보내|기준서|체크시트|작업서/.test(t)) return 'doc';
+    if (/측정|시간|일정|타임|기한|만료|갱신|사이클/.test(t)) return 'clock';
+    if (/판정|검사|합불|확인|점검|불량|대조/.test(t)) return 'check';
+    if (/사진|도면|이미지|비전|스캔/.test(t)) return 'camera';
+    if (/알림|메일|경보|경고/.test(t)) return 'bell';
+    if (/검색|찾|진단|원인/.test(t)) return 'search';
+    if (/로그인|승인|권한|구성원/.test(t)) return 'shield';
+    if (/교육|신입|인원|담당/.test(t)) return 'users';
+    if (/재고|자재|발주|실사/.test(t)) return 'layers';
+    return 'target';
+  }
+  function absUrl(u) { try { return new URL(u, location.href).href; } catch (e) { return u; } }
+  function homeHtml() {
+    var L = LD, co = L.company || {}, title = S.title || document.title;
+    var head = String(L.headline || title).split('\n').map(esc).join('<br>');
+    var lead = L.lead || S.summary || '';
+    var eyebrow = L.eyebrow || (co.name ? co.name + (co.team ? ' · ' + co.team : '') : (S.course || ''));
+    var feats = (S.features || []).slice(0, 6), flow = (S.flow || []).slice(0, 6), goals = (S.goals || []).slice(0, 3);
+    var banner = L.image && L.imageMode === 'banner', cover = L.image && L.imageMode === 'cover';
+    var heroImg = L.hero || (cover ? L.image : '');
+    var brand = co.logo ? '<img class="hp-logo" src="' + esc(co.logo) + '" alt="' + esc(co.name || '') + '">' :
+      (co.name ? '<span class="hp-wordmark">' + esc(co.name) + (co.en ? '<small>' + esc(co.en) + '</small>' : '') + '</span>' : '');
+    var tool = '<span class="hp-tool"><span class="hp-mark">' + icon(iconFor(title + ' ' + (feats[0] || {}).name), 'hp-mark-ic') + '</span><span class="hp-tool-t">' + esc(title) + '</span></span>';
+    var nav = '<header class="hp-nav"><div class="hp-in hp-nav-in">' +
+      '<a class="hp-brand" href="#hp-top" aria-label="맨 위로">' + brand + (brand ? '<i class="hp-div" aria-hidden="true"></i>' : '') + tool + '</a>' +
+      '<nav class="hp-links" aria-label="홈페이지 메뉴">' + (feats.length ? '<a href="#hp-features">기능</a>' : '') + (flow.length ? '<a href="#hp-flow">사용 순서</a>' : '') +
+      (S.screen && ((heroImg && !cover) || banner) ? '<a href="#hp-screen">화면</a>' : '') + (S.plan ? '<a href="' + esc(S.plan) + '">기획서</a>' : '') + '</nav>' +
+      '<div class="hp-acts"><button type="button" class="hp-btn hp-ghost" data-login="login">로그인</button>' +
+      '<button type="button" class="hp-btn hp-primary" data-login="signup">시작하기</button></div></div></header>';
+    var cta = '<div class="hp-cta-row"><button type="button" class="hp-btn hp-primary hp-lg" data-login="login">로그인하고 시작하기 ' + icon('arrow', 'hp-ic-s') + '</button>' +
+      (S.plan ? '<a class="hp-btn hp-line hp-lg" href="' + esc(S.plan) + '">기획서 보기</a>' : '') + '</div>';
+    var trust = '<ul class="hp-trust-chips"><li>' + icon('shield', 'hp-ic-s') + '승인된 구성원만</li><li>' + icon('folder', 'hp-ic-s') + '자료는 내 브라우저에</li><li>' + icon('users', 'hp-ic-s') + '회사 · 개인 메일 가입</li></ul>';
+    var frame = function (src, cap) {
+      return '<figure class="hp-frame"><div class="hp-frame-bar"><i></i><i></i><i></i><span>' + esc((location.host || '').replace(/^www\./, '')) + '</span></div>' +
+        '<img src="' + esc(src) + '" alt="' + esc(cap) + '" loading="lazy"></figure>';
+    };
+    var chips = feats.slice(0, 2).map(function (f, i) {
+      return '<div class="hp-float hp-float-' + (i + 1) + '">' + icon(iconFor(f.name)) + '<span>' + esc(f.name) + '</span></div>';
+    }).join('');
+    var visual = heroImg && !cover ? '<figure class="hp-photo"><img src="' + esc(heroImg) + '" alt="' + esc(L.heroAlt || title) + '"></figure>' :
+      (S.screen ? frame(S.screen, title + ' 실제 화면') : '<div class="hp-art">' + art(flow.length) + '</div>');
+    var hero;
+    if (banner) {
+      hero = '<section class="hp-banner" id="hp-top"><button type="button" class="hp-banner-btn" data-login="login" aria-label="로그인">' +
+        '<img src="' + esc(L.image) + '" alt="' + esc(L.imageAlt || title) + '"></button></section>' +
+        '<section class="hp-intro"><div class="hp-in hp-intro-in"><div><p class="hp-eyebrow">' + esc(eyebrow) + '</p><h1 class="hp-h1s">' + head + '</h1>' +
+        (lead ? '<p class="hp-lead">' + esc(lead) + '</p>' : '') + '</div>' + cta + '</div></section>';
+    } else {
+      hero = '<section class="hp-hero' + (cover ? ' hp-cover' : '') + '" id="hp-top"' +
+        (cover ? ' style="--hp-photo:url(&quot;' + esc(absUrl(L.image)) + '&quot;)"' : '') + '><div class="hp-in hp-hero-in">' +
+        '<div class="hp-hero-copy hp-rv">' + (eyebrow ? '<p class="hp-eyebrow">' + esc(eyebrow) + '</p>' : '') + '<h1>' + head + '</h1>' +
+        (lead ? '<p class="hp-lead">' + esc(lead) + '</p>' : '') + cta + trust + '</div>' +
+        '<div class="hp-hero-vis hp-rv">' + visual + chips + '</div></div></section>';
+    }
+    var goalsH = goals.length ? '<section class="hp-sec hp-goals"><div class="hp-in"><div class="hp-goal-grid">' + goals.map(function (g, i) {
+      return '<div class="hp-goal hp-rv"><span class="hp-goal-n">0' + (i + 1) + '</span><p>' + esc(g) + '</p></div>';
+    }).join('') + '</div></div></section>' : '';
+    var featH = feats.length ? '<section class="hp-sec" id="hp-features"><div class="hp-in"><div class="hp-head hp-rv"><p class="hp-kicker">기능</p><h2>현장에서 바로 쓰는 기능</h2></div>' +
+      '<div class="hp-feat-grid">' + feats.map(function (f) {
+        return '<article class="hp-feat hp-rv"><span class="hp-feat-ic">' + icon(iconFor(f.name + ' ' + f.desc)) + '</span><h3>' + esc(f.name) + '</h3><p>' + esc(f.desc) + '</p></article>';
+      }).join('') + '</div></div></section>' : '';
+    var flowH = flow.length ? '<section class="hp-sec hp-alt" id="hp-flow"><div class="hp-in"><div class="hp-head hp-rv"><p class="hp-kicker">사용 순서</p><h2>이렇게 씁니다</h2></div>' +
+      '<ol class="hp-steps">' + flow.map(function (st, i) {
+        return '<li class="hp-step hp-rv"><span class="hp-step-n">' + (i + 1) + '</span><h3>' + esc(st.step) + '</h3>' + (st.desc ? '<p>' + esc(st.desc) + '</p>' : '') + '</li>';
+      }).join('') + '</ol></div></section>' : '';
+    var screenH = S.screen && ((heroImg && !cover) || banner) ? '<section class="hp-sec" id="hp-screen"><div class="hp-in"><div class="hp-head hp-rv"><p class="hp-kicker">실제 화면</p><h2>한 화면에서 확인합니다</h2></div>' +
+      '<div class="hp-screen hp-rv">' + frame(S.screen, title + ' 실제 화면') + '<p class="hp-cap">가상 예제 데이터로 찍은 화면입니다.</p></div></div></section>' : '';
+    var trustH = '<section class="hp-sec hp-alt"><div class="hp-in"><div class="hp-head hp-rv"><p class="hp-kicker">믿고 쓰는 이유</p><h2>우리 팀만, 안전하게</h2></div><div class="hp-trust">' +
+      '<div class="hp-tr hp-rv">' + icon('shield') + '<h3>승인제 접근</h3><p>회사 메일이나 개인 메일로 가입한 뒤 관리자가 승인한 구성원만 도구를 엽니다. 관리자는 팀원의 신청을 직접 승인합니다.</p></div>' +
+      '<div class="hp-tr hp-rv">' + icon('folder') + '<h3>자료는 내 브라우저에</h3><p>업무 파일과 입력한 값은 서버로 보내지 않고 쓰는 사람의 브라우저에 저장합니다. 필요하면 백업 파일로 옮깁니다.</p></div>' +
+      '<div class="hp-tr hp-rv">' + icon('move') + '<h3>우리 회사로 옮기기</h3><p>로그인 서버와 저장소를 회사 계정으로 옮겨 그대로 쓸 수 있습니다. SQL 한 번과 설정 파일 한 곳이면 됩니다.</p></div>' +
+      '</div></div></section>';
+    var band = '<section class="hp-band"><div class="hp-in hp-band-in hp-rv"><div><h2>오늘 업무부터 바로 써 보세요</h2><p>가입 → 사용 신청 → 관리자 승인 뒤 바로 열립니다.</p></div>' +
+      '<div class="hp-cta-row"><button type="button" class="hp-btn hp-onband hp-lg" data-login="signup">회원가입</button><button type="button" class="hp-btn hp-line-band hp-lg" data-login="login">로그인</button></div></div></section>';
+    var foot = '<footer class="hp-foot"><div class="hp-in hp-foot-in"><div class="hp-foot-brand">' + (co.name ? '<b>' + esc(co.name) + '</b>' : '') + '<span>' + esc(title) + '</span></div>' +
+      '<p>' + esc(S.course || '') + (S.plan ? ' · <a href="' + esc(S.plan) + '">최종 기획서</a>' : '') + '</p>' +
+      '<p class="hp-foot-s">© ' + new Date().getFullYear() + ' ' + esc(co.name || title) + ' · 업무 자료는 서버로 보내지 않고 이 브라우저에 저장합니다</p></div></footer>';
+    var modal = '<div class="hp-modal" id="agModal" hidden><div class="hp-dialog" role="dialog" aria-modal="true" aria-label="로그인">' +
+      '<button type="button" class="hp-x" data-close aria-label="닫기">×</button><div id="agModalBody"></div></div></div>';
+    return '<div class="hp">' + nav + hero + goalsH + featH + flowH + screenH + trustH + band + foot + '</div>' + modal;
+  }
+  function openModal() {
+    var m = gate.querySelector('#agModal'); if (!m) return;
+    m.hidden = false; gate.classList.add('hp-modal-open');
+    var i = m.querySelector('input'); if (i) setTimeout(function () { i.focus(); }, 30);
+  }
+  function closeModal() { var m = gate.querySelector('#agModal'); if (m) m.hidden = true; gate.classList.remove('hp-modal-open'); }
+  function bindHome() {
+    gate.querySelectorAll('[data-login]').forEach(function (b) {
+      b.onclick = function () { viewLogin(b.getAttribute('data-login'), null, true); };
+    });
+    var m = gate.querySelector('#agModal');
+    m.addEventListener('click', function (e) { if (e.target === m || e.target.hasAttribute('data-close')) closeModal(); });
+    gate.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !m.hidden) closeModal(); });
+    gate.querySelectorAll('.hp-nav a[href^="#"]').forEach(function (a) {
+      a.onclick = function (e) { var t = gate.querySelector(a.getAttribute('href')); if (!t) return; e.preventDefault(); t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }); };
+    });
+    var nav = gate.querySelector('.hp-nav');
+    gate.addEventListener('scroll', function () { nav.classList.toggle('is-scrolled', gate.scrollTop > 8); }, { passive: true });
+    // 화면에 들어올 때 살짝 떠오른다 — 모션 최소화 · IntersectionObserver 없으면 처음부터 보인다
+    var els = gate.querySelectorAll('.hp-rv');
+    if (reduce || !('IntersectionObserver' in window)) { els.forEach(function (el) { el.classList.add('is-in'); }); }
+    else {
+      gate.classList.add('hp-anim');
+      var io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); } }); }, { root: gate, threshold: 0.12 });
+      els.forEach(function (el) { io.observe(el); });
+    }
+    // 사용 순서 — 차례로 밝아진다
+    var steps = gate.querySelectorAll('.hp-step'), k = 0;
+    if (steps.length && !reduce) fxTimer = setInterval(function () {
+      if (gate.hidden) return stopFx();
+      steps.forEach(function (s, j) { s.classList.toggle('is-on', j === k); }); k = (k + 1) % steps.length;
+    }, 2200);
+  }
+
   // ───────── 로그인 · 회원가입 ─────────
-  function viewLogin(tab, note) {
+  function viewLogin(tab, note, open) {
     var signup = tab === 'signup';
-    show('<div class="ag-card">' +
+    var card = ('<div class="ag-card">' +
       '<div class="ag-tabs" role="tablist"><button type="button" role="tab" data-tab="login" aria-selected="' + !signup + '">로그인</button>' +
       '<button type="button" role="tab" data-tab="signup" aria-selected="' + signup + '">회원가입</button></div>' +
       (signup ?
@@ -177,8 +322,16 @@
         (C.kakao ? '<div class="ag-or"><span>또는</span></div><button type="button" class="ag-btn ag-kakao" id="agKakao">카카오로 로그인</button>' : '') +
         '<p class="ag-hint">처음이면 「회원가입」에서 가입하세요. 비밀번호를 잊었으면 관리자에게 알려 주세요.</p>') +
       '<p class="ag-msg" role="status" aria-live="polite"></p></div>');
+    if (homeOn()) {
+      if (!gate.querySelector('.hp')) {
+        stopFx(); root.classList.add('auth-lock'); gate.hidden = false;
+        gate.classList.add('ag-home'); gate.innerHTML = homeHtml(); gate.scrollTop = 0; bindHome();
+      }
+      gate.querySelector('#agModalBody').innerHTML = card;
+      if (open || note) openModal();
+    } else show(card);
     if (note) msg(note.text, note.kind);
-    gate.querySelectorAll('[data-tab]').forEach(function (b) { b.onclick = function () { viewLogin(b.getAttribute('data-tab')); }; });
+    gate.querySelectorAll('[data-tab]').forEach(function (b) { b.onclick = function () { viewLogin(b.getAttribute('data-tab'), null, true); }; });
     var f = $('#agLogin');
     if (f) f.onsubmit = function (ev) {
       ev.preventDefault();
