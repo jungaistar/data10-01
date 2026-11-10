@@ -178,6 +178,40 @@ html.auth-lock body { overflow: hidden; }
 .ag-feats li:hover { border-color: rgba(255, 255, 255, .32); background: rgba(255, 255, 255, .08); }
 .ag-light .ag-feats li:hover { border-color: var(--ag-navy); background: #fff; }
 
+/* ───────── 대문 사진 ───────── */
+.ag-sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* banner: 완성 그림을 위에 그대로(잘리지 않게), 아래에 기능 · 로그인 */
+.ag.ag-has-banner { background: var(--ag-bg); }
+.ag-banner { background: var(--ag-navy-2); display: flex; justify-content: center; }
+.ag-banner { cursor: pointer; }
+.ag-banner img { display: block; width: 100%; max-width: 1600px; height: auto; max-height: 72vh; object-fit: contain; }
+/* 데스크톱: 그림 아래로 로그인 카드가 첫 화면에 걸리게 높이를 줄인다 */
+@media (min-width: 960px) { .ag-banner img { max-height: 52vh; } }
+.ag-banner:focus-visible { outline: 3px solid var(--ag-brand); outline-offset: -3px; }
+.ag-wrap-banner { padding-top: 24px; padding-bottom: 8px; }
+.ag-has-banner .ag-hero-sub { background: none; color: var(--ag-ink); margin: 0; padding: 0 0 8px; }
+.ag-has-banner .ag-feats li { background: #fff; border-color: var(--ag-line); }
+.ag-has-banner .ag-feats b { color: var(--ag-ink); } .ag-has-banner .ag-feats span { color: var(--ag-sub); }
+.ag-has-banner .ag-flow-t { color: var(--ag-sub); }
+.ag-has-banner .ag-flow li { background: #fff; color: var(--ag-ink); border: 1px solid var(--ag-line); }
+.ag-has-banner .ag-flow li.is-on { box-shadow: inset 0 0 0 1.5px var(--ag-brand); color: var(--ag-brand-d); }
+.ag-has-banner .ag-n { background: var(--ag-navy); color: #fff; }
+@media (min-width: 960px) {
+  .ag-wrap-banner { min-height: 0; align-items: start; padding-top: 32px; }
+  .ag-has-banner .ag-hero-sub { padding: 8px 40px 24px 0; min-height: 0; }
+  .ag-has-banner .ag-side { padding: 8px 0 24px 40px; }
+  .ag-has-banner .ag-foot { color: var(--ag-sub); }
+}
+/* cover: 사진 위에 대표색을 덮는다(글자 대비를 위해 왼쪽을 더 짙게) */
+.ag-hero.ag-cover { background:
+  linear-gradient(100deg, color-mix(in srgb, var(--ag-navy-2) 94%, transparent) 0%, color-mix(in srgb, var(--ag-navy) 82%, transparent) 55%, color-mix(in srgb, var(--ag-navy) 45%, transparent) 100%),
+  var(--ag-photo) center / cover no-repeat, var(--ag-navy-2); }
+@media (min-width: 960px) {
+  .ag.ag-has-cover { background: linear-gradient(90deg, var(--ag-navy-2) 0, var(--ag-navy-2) 50%, var(--ag-bg) 50%); }
+  .ag-has-cover .ag-wrap { max-width: none; padding-left: 0; }
+  .ag-has-cover .ag-hero.ag-cover { margin: 0; padding: 56px 48px 56px max(var(--ag-pad), calc((100vw - 1180px) / 2)); min-height: 100vh; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ag *, .ag-modal * { transition: none !important; animation: none !important; }
   .ag-ring { opacity: .6; }

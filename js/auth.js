@@ -19,7 +19,9 @@
   if (isLocal && C.localBypass !== false && !force) { unlockPage(); return; }
 
   var gate = document.createElement('div');
-  gate.id = 'authGate'; gate.className = 'ag' + ((S.landing || {}).theme === 'light' ? ' ag-light' : '');
+  var LD = S.landing || {};
+  gate.id = 'authGate'; gate.className = 'ag' + (LD.theme === 'light' ? ' ag-light' : '') +
+    (LD.image && LD.imageMode === 'banner' ? ' ag-has-banner' : '') + (LD.image && LD.imageMode === 'cover' ? ' ag-has-cover' : '');
   // 과제별 색(plan.json landing.colors → auth-config) — 키는 ink · sub · bg · navy · navy2 · brand · brandDark · accent
   var COL = (S.landing || {}).colors || {}, VAR = { ink: '--ag-ink', sub: '--ag-sub', bg: '--ag-bg', navy: '--ag-navy', navy2: '--ag-navy-2', brand: '--ag-brand', brandDark: '--ag-brand-d', accent: '--ag-accent' };
   Object.keys(COL).forEach(function (k) { if (VAR[k] && /^#[0-9a-fA-F]{3,8}$/.test(COL[k])) root.style.setProperty(VAR[k], COL[k]); }); gate.setAttribute('role', 'dialog'); gate.setAttribute('aria-modal', 'true');
@@ -49,7 +51,20 @@
     }).join('');
     var L = S.landing || {}, head = String(L.headline || S.title || document.title).split('\n').map(esc).join('<br>');
     var eyebrow = L.eyebrow || S.course, lead = L.lead || S.summary;
-    return '<div class="ag-wrap"><section class="ag-hero">' + art((S.steps || []).slice(0, 6).length) +
+    // 대문 사진(plan.json landing.image) — banner: 문구까지 든 완성 그림을 잘리지 않게 그대로, cover: 사진 위에 대표색을 덮고 문구를 얹는다
+    if (L.image && L.imageMode === 'banner') {
+      // 그림 속 「시작하기」 단추는 그림일 뿐이라, 그림 전체를 누르면 로그인 칸으로 내려간다
+      return '<a class="ag-banner" href="#agLoginBox" title="로그인으로"><img src="' + esc(L.image) + '" alt="' + esc(L.imageAlt || S.title || '') + '"></a>' +
+        '<div class="ag-wrap ag-wrap-banner"><section class="ag-hero ag-hero-sub"><h1 class="ag-sr">' + head + '</h1>' +
+        (feats ? '<ul class="ag-feats">' + feats + '</ul>' : '') +
+        (steps ? '<div class="ag-flow"><p class="ag-flow-t">이렇게 씁니다</p><ol>' + steps + '</ol></div>' : '') +
+        '</section><section class="ag-side" id="agLoginBox">' + right + '</section></div>' +
+        '<p class="ag-foot">가입 → 사용 신청 → 관리자 승인 뒤에 쓸 수 있습니다 · 업무 자료는 서버로 보내지 않고 이 브라우저에 저장합니다</p>';
+    }
+    var cover = L.image && L.imageMode === 'cover';
+    // cover 사진 주소는 페이지 기준 절대 주소로 넣는다(CSS 변수 안의 상대 주소는 스타일시트 위치 기준으로 풀린다)
+    return '<div class="ag-wrap"><section class="ag-hero' + (cover ? ' ag-cover' : '') + '"' +
+      (cover ? ' style="--ag-photo:url(&quot;' + esc(new URL(L.image, location.href).href) + '&quot;)"' : '') + '>' + (cover ? '' : art((S.steps || []).slice(0, 6).length)) +
       (eyebrow ? '<p class="ag-eyebrow">' + esc(eyebrow) + '</p>' : '') +
       '<h1>' + head + '</h1>' +
       (lead ? '<p class="ag-lead">' + esc(lead) + '</p>' : '') +
@@ -60,6 +75,13 @@
   }
   function show(right) {
     root.classList.add('auth-lock'); gate.hidden = false; gate.innerHTML = shell(right); gate.scrollTop = 0; fx();
+    var bn = gate.querySelector('.ag-banner');
+    if (bn) bn.onclick = function (e) {
+      e.preventDefault();
+      var box = gate.querySelector('#agLoginBox'), inp = box && box.querySelector('input');
+      if (box) box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      if (inp) setTimeout(function () { inp.focus({ preventScroll: true }); }, reduce ? 0 : 450);
+    };
   }
 
   // ───────── 대문 그림(SVG) · 효과 ─────────

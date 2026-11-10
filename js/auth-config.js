@@ -37,6 +37,15 @@ window.AUTH_CONFIG = {
       "관리선 판정",
       "이력 맞춰 보기",
       "라벨링"
-    ]
+    ],
+    "landing": {
+      "colors": {
+        "navy": "#002554",
+        "navy2": "#001a3d",
+        "brand": "#003087",
+        "brandDark": "#002554",
+        "accent": "#5fe35f"
+      }
+    }
   }
 };

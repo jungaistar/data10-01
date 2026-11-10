@@ -1,0 +1,19 @@
+/* 회사 공식 색 덮어쓰기 층(2026-11-10 요청: 「대시보드 전체 디자인을 회사 공식 컬러로」)
+   보내 주신 컬러 시스템: Eco Green #00E600 · Heritage Green #00AD1D · Prosperity Green #008233 · Discovery Blue #003087 · Trust Blue #002554
+   원본 style.css 는 그대로 두고 이 파일을 맨 마지막에 읽는다(되돌리려면 index.html 의 이 줄만 빼면 된다). */
+:root {
+  --primary: #003087;        /* Discovery Blue — 단추 · 링크 · 선택 */
+  --primary-dark: #002554;   /* Trust Blue */
+  --primary-soft: #e6edf8;
+  --side: #002554;           /* 왼쪽 메뉴 바탕 = Trust Blue */
+  --side-2: #003087;
+  --on-side: #eef3fb;
+  --on-side-muted: #a9bbd6;
+  --ok: #008233;             /* Prosperity Green — 정상 */
+  --fact: #008233;
+  --lv-ok: #008233; --lv-ok-bg: #e3f5e8;
+  --series-1: #003087;       /* 전류 */
+  --series-2: #d9601f;       /* 온도 */
+  --series-3: #00AD1D;       /* 진동 = Heritage Green */
+  --series-4: #3fa0e0;       /* 전압 */
+}
