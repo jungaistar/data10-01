@@ -16,7 +16,9 @@
   var force = /[?&]auth=1(&|$)/.test(location.search);
 
   function unlockPage() { root.classList.remove('auth-lock'); }
-  if (isLocal && C.localBypass !== false && !force) { unlockPage(); return; }
+  // 내 PC(파일로 열기 · localhost)는 로그인을 건너뛴다 — 대신 「사용 방법」만 붙인다(맨 아래 LOCAL 처리)
+  var LOCAL = isLocal && C.localBypass !== false && !force;
+  if (LOCAL) unlockPage();
 
   var gate = document.createElement('div');
   var LD = S.landing || {};
@@ -25,17 +27,17 @@
   // 과제별 색(plan.json landing.colors → auth-config) — 키는 ink · sub · bg · navy · navy2 · brand · brandDark · accent
   var COL = (S.landing || {}).colors || {}, VAR = { ink: '--ag-ink', sub: '--ag-sub', bg: '--ag-bg', navy: '--ag-navy', navy2: '--ag-navy-2', brand: '--ag-brand', brandDark: '--ag-brand-d', accent: '--ag-accent' };
   Object.keys(COL).forEach(function (k) { if (VAR[k] && /^#[0-9a-fA-F]{3,8}$/.test(COL[k])) root.style.setProperty(VAR[k], COL[k]); }); gate.setAttribute('role', 'dialog'); gate.setAttribute('aria-modal', 'true');
-  document.body.appendChild(gate);
+  if (!LOCAL) document.body.appendChild(gate);
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function $(sel, el) { return (el || gate).querySelector(sel); }
 
-  if (!window.supabase || !C.url || !C.anonKey || !P) {
+  if (!LOCAL && (!window.supabase || !C.url || !C.anonKey || !P)) {
     gate.innerHTML = shell('<div class="ag-card"><h2>로그인 설정이 없습니다</h2><p class="ag-sub">js/auth-config.js 에 Supabase 주소와 공개 키를 넣어 주세요. 안내는 docs/내_깃허브로_옮기기.md 에 있습니다.</p></div>');
     return;
   }
 
-  var sb = window.supabase.createClient(C.url, C.anonKey, {
+  var sb = LOCAL ? null : window.supabase.createClient(C.url, C.anonKey, {
     auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'sb-' + P + '-auth' }
   });
   var T = { members: P + '_members' }, RPC = { save: P + '_member_save', hasAdmin: P + '_has_admin', claim: P + '_claim_first_admin' };
@@ -461,7 +463,7 @@
   }
 
   function unlock() {
-    stopFx(); gate.hidden = true; gate.innerHTML = ''; unlockPage(); mountChip(); startIdle();
+    stopFx(); gate.hidden = true; gate.innerHTML = ''; unlockPage(); mountShell(); startIdle();
   }
   function signOut() {
     sb.auth.signOut({ scope: 'local' }).then(function () { route(); });
@@ -469,7 +471,12 @@
 
   // ───────── 상단 바 계정 칩 ─────────
   function isAdmin() { return !!(member && member.status === 'active' && (member.roles || []).indexOf('admin') >= 0); }
-  function removeChip() { var c = document.getElementById('authChip'); if (c) c.remove(); }
+  function removeChip() {
+    ['authChip', 'kitNav'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); });
+    var pg = document.getElementById('kitPage'), main = document.getElementById('main');
+    if (pg) pg.remove(); if (main) main.hidden = false;
+    root.classList.remove('kit-shell', 'kit-a', 'kit-b', 'kit-page-on');
+  }
   function mountChip() {
     removeChip();
     var host = document.querySelector('.topbar') || document.body;
@@ -485,12 +492,265 @@
   }
   function refreshPendingCount() {
     sb.from(T.members).select('user_id', { count: 'exact', head: true }).eq('status', 'pending').then(function (r) {
-      var n = document.querySelector('#authMembers .auth-chip-n'); if (!n) return;
-      n.hidden = !r.count; n.textContent = r.count || '';
+      document.querySelectorAll('#authChip .auth-chip-n, #kitNav .auth-chip-n').forEach(function (n) { n.hidden = !r.count; n.textContent = r.count || ''; });
     });
   }
 
-  // ───────── 구성원 관리(관리자) ─────────
+
+  // ───────── 도구 화면 틀(로그인 뒤) ─────────
+  // 위쪽 줄: 사용 방법 · 관리(관리자) · 사용자 메뉴 / 왼쪽: 「도움 · 관리」 묶음 / 키트 페이지(#/kit-guide · #/kit-me · #/kit-admin)
+  // 앱 라우터는 모르는 주소를 받아도 주소를 바꾸지 않는다(15개 실측) — 그래서 #main 을 감추고 옆의 키트 칸을 보인다.
+  var KIT = { 'kit-guide': '사용 방법', 'kit-me': '내 정보', 'kit-admin': '관리' };
+  var kitBound = false;
+  function initials(n) { n = String(n || '').trim(); if (!n) return '나'; return /^[가-힣]{3,4}$/.test(n) ? n.slice(1, 3) : n.slice(0, /[가-힣]/.test(n) ? 2 : 2).toUpperCase(); }
+  function mountShell() {
+    removeChip();
+    root.classList.add('kit-shell', document.querySelector('.sidebar') ? 'kit-b' : 'kit-a');
+    var host = document.querySelector('.topbar') || document.body, adm = isAdmin(), local = !!member.local;
+    var c = document.createElement('div');
+    c.id = 'authChip'; c.className = 'auth-chip' + (host === document.body ? ' is-float' : '');
+    c.innerHTML = '<a class="auth-chip-link" href="#/kit-guide">' + icon('doc', 'kit-ic') + '<span>사용 방법</span></a>' +
+      (adm ? '<a class="auth-chip-link" href="#/kit-admin">' + icon('shield', 'kit-ic') + '<span>관리</span><span class="auth-chip-n" hidden></span></a>' : '') +
+      (local ? '' : '<div class="auth-user"><button type="button" class="auth-user-btn" aria-haspopup="menu" aria-expanded="false">' +
+      '<span class="auth-av" aria-hidden="true">' + esc(initials(member.name || member.email)) + '</span>' +
+      '<span class="auth-user-t"><b>' + esc(member.name || member.email || '') + '</b><small>' + (adm ? '관리자' : '구성원') + (member.org ? ' · ' + esc(member.org) : '') + '</small></span>' +
+      '<svg class="auth-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
+      '<div class="auth-menu" role="menu" hidden><p class="auth-menu-h">' + esc(member.email || '') + '</p>' +
+      '<a role="menuitem" href="#/kit-me">' + icon('users', 'kit-ic') + '내 정보 · 비밀번호</a>' +
+      (adm ? '<a role="menuitem" href="#/kit-admin">' + icon('shield', 'kit-ic') + '관리 · 구성원 승인</a>' : '') +
+      '<a role="menuitem" href="#/kit-guide">' + icon('doc', 'kit-ic') + '사용 방법</a>' +
+      '<button type="button" role="menuitem" id="authOut">' + icon('move', 'kit-ic') + '로그아웃</button></div></div>');
+    host.appendChild(c);
+    var btn = c.querySelector('.auth-user-btn'), menu = c.querySelector('.auth-menu');
+    if (btn) {
+    function setMenu(on) { menu.hidden = !on; btn.setAttribute('aria-expanded', String(on)); }
+    btn.onclick = function (e) { e.stopPropagation(); setMenu(menu.hidden); };
+    menu.addEventListener('click', function () { setMenu(false); });
+    document.addEventListener('click', function (e) { if (!c.contains(e.target)) setMenu(false); });
+    document.getElementById('authOut').onclick = signOut;
+    }
+    // 왼쪽 「도움 · 관리」 묶음 — 앱이 #nav 안을 다시 그려도 지워지지 않게 #nav 바로 뒤 형제로 둔다
+    var nav = document.getElementById('nav');
+    if (nav) {
+      var g = document.createElement('nav'); g.id = 'kitNav'; g.className = 'kit-nav'; g.setAttribute('aria-label', '도움 · 관리');
+      g.innerHTML = '<p class="kit-nav-t">' + (local ? '도움' : '도움 · 관리') + '</p>' +
+        '<a href="#/kit-guide">' + icon('doc', 'kit-ic') + '<span>사용 방법</span></a>' +
+        (local ? '' : '<a href="#/kit-me">' + icon('users', 'kit-ic') + '<span>내 정보</span></a>') +
+        (adm ? '<a href="#/kit-admin">' + icon('shield', 'kit-ic') + '<span>관리</span><span class="auth-chip-n" hidden></span></a>' : '');
+      nav.parentNode.insertBefore(g, nav.nextSibling);
+    }
+    // 키트 페이지 칸 — 앱 본문(#main)과 같은 틀 클래스를 써서 여백 · 폭이 같다
+    var main = document.getElementById('main');
+    if (main) {
+      var pg = document.createElement('section'); pg.id = 'kitPage'; pg.className = (main.className || '') + ' kit-page'; pg.hidden = true; pg.tabIndex = -1;
+      pg.setAttribute('aria-live', 'polite'); main.parentNode.insertBefore(pg, main.nextSibling);
+    }
+    if (!kitBound) { kitBound = true; addEventListener('hashchange', function () { if (member) kitRoute(); }); }
+    kitRoute(); if (!local) refreshPendingCount();
+  }
+  function kitRoute() {
+    var h = (location.hash || '').replace(/^#\/?/, '').split(/[?/]/)[0];
+    var pg = document.getElementById('kitPage'), main = document.getElementById('main');
+    var on = !!KIT[h] && (h !== 'kit-admin' || isAdmin()) && (h === 'kit-guide' || !member.local);
+    document.querySelectorAll('#kitNav a, #authChip .auth-chip-link').forEach(function (a) {
+      if (a.getAttribute('href') === '#/' + h && on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    if (!pg || !main) return;
+    root.classList.toggle('kit-page-on', on);
+    if (!on) { pg.hidden = true; pg.innerHTML = ''; main.hidden = false; return; }
+    main.hidden = true; pg.hidden = false;
+    ({ 'kit-guide': pageGuide, 'kit-me': pageMe, 'kit-admin': pageAdmin })[h](pg);
+    try { pg.focus({ preventScroll: true }); } catch (e) {}
+    window.scrollTo(0, 0);
+  }
+  function kpHead(kicker, title, sub) {
+    return '<header class="kp-head"><p class="kp-kicker">' + esc(kicker) + '</p><h1>' + esc(title) + '</h1>' + (sub ? '<p class="kp-sub">' + esc(sub) + '</p>' : '') + '</header>';
+  }
+  var ST_KO = { pending: '승인 대기', active: '사용', disabled: '중지' };
+  function fmtTime(t) { if (!t) return ''; var d = new Date(t); if (isNaN(d)) return String(t).slice(0, 16); var p = function (x) { return String(x).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+
+  // ─── 사용 방법 ───
+  function pageGuide(pg) {
+    var G = S.guide || {}, flow = G.flow && G.flow.length ? G.flow : (S.flow || []), title = S.title || document.title;
+    var toc = [['start', '처음 시작하기'], flow.length && ['flow', '사용 순서'], (G.screens || []).length && ['screens', '화면별 안내'],
+      (G.data || []).length && ['data', '넣는 자료'], (G.rules || []).length && ['rules', '계산 · 판정 기준'], ['keep', '자료 보관 · 백업'], ['account', '계정 · 로그인'],
+      (G.limits || []).length && ['limits', '이번 판에서 하지 않는 것']].filter(Boolean);
+    var sec = function (id, t, body) { return '<section class="kp-card" id="kg-' + id + '"><h2>' + esc(t) + '</h2>' + body + '</section>'; };
+    var li = function (a) { return '<ul class="kp-list">' + a.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>'; };
+    pg.innerHTML = '<div class="kp">' + kpHead('사용 방법', title + ' 사용 안내', S.summary || '') +
+      '<nav class="kp-toc" aria-label="목차">' + toc.map(function (t) { return '<a href="#kg-' + t[0] + '" data-kg="' + t[0] + '">' + esc(t[1]) + '</a>'; }).join('') +
+      '<button type="button" class="kp-btn kp-ghost" data-print>인쇄 · PDF</button></nav>' +
+      sec('start', '처음 시작하기', '<ol class="kp-steps">' +
+        '<li><b>회원가입</b><span>로그인 전 화면의 「시작하기」에서 이름 · 소속 · 연락처와 회사 메일이나 개인 메일 · 비밀번호(8자 이상)로 가입합니다.</span></li>' +
+        '<li><b>사용 신청 · 승인</b><span>가입하면 사용 신청이 들어가고, 관리자가 승인하면 바로 도구가 열립니다. 승인 전에는 「승인 대기」 화면이 보입니다.</span></li>' +
+        '<li><b>예시로 둘러보기</b><span>처음에는 화면의 「예시 · 샘플 데이터로 시작」 단추로 가상 자료를 넣어 모든 메뉴를 한 번씩 눌러 봅니다. 실제 자료를 넣기 전에 설정에서 예시 자료를 지웁니다.</span></li>' +
+        '<li><b>실제 자료로 쓰기</b><span>아래 「사용 순서」대로 실제 파일을 넣고 결과를 확인합니다. 결과는 엑셀 · 인쇄 · 워드로 내보낼 수 있습니다.</span></li></ol>') +
+      (flow.length ? sec('flow', '사용 순서', '<ol class="kp-flow">' + flow.map(function (st, i) {
+        return '<li><span class="kp-n">' + (i + 1) + '</span><div><b>' + esc(st.step) + '</b>' + (st.desc ? '<p>' + esc(st.desc) + '</p>' : '') + '</div></li>';
+      }).join('') + '</ol>') : '') +
+      ((G.screens || []).length ? sec('screens', '화면별 안내', '<div class="kp-tw"><table class="kp-table"><thead><tr><th>화면</th><th>하는 일</th></tr></thead><tbody>' +
+        G.screens.map(function (r) { return '<tr><th scope="row">' + esc(r.name) + '</th><td>' + esc(r.desc) + '</td></tr>'; }).join('') + '</tbody></table></div>') : '') +
+      ((G.data || []).length ? sec('data', '넣는 자료', '<div class="kp-tw"><table class="kp-table"><thead><tr><th>자료</th><th>들어 있어야 할 칸</th></tr></thead><tbody>' +
+        G.data.map(function (r) { return '<tr><th scope="row">' + esc(r.name) + '</th><td>' + esc(r.fields) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+        '<p class="kp-note">열 이름이 조금 달라도 찾아 연결하고, 못 찾은 열은 화면에서 골라 연결합니다.</p>') : '') +
+      ((G.rules || []).length ? sec('rules', '계산 · 판정 기준', li(G.rules)) : '') +
+      sec('keep', '자료 보관 · 백업', li([
+        '업무 파일과 입력한 값은 서버로 보내지 않고 지금 쓰는 브라우저 안에만 저장됩니다. 다른 PC · 다른 브라우저에서는 보이지 않습니다.',
+        '설정의 「백업(JSON) 내려받기」로 정기적으로 백업하고, 다른 PC 에서는 「백업 불러오기」로 옮깁니다.',
+        '브라우저의 「인터넷 사용 기록 삭제(쿠키 · 사이트 데이터)」나 시크릿 창은 저장된 자료를 지우거나 남기지 않으니 주의합니다.',
+        'AI 자동 보내기는 설정에서 직접 켠 경우에만 동작하고, 사람 이름은 기본으로 가려 보냅니다.'])) +
+      sec('account', '계정 · 로그인', li([
+        '비밀번호는 오른쪽 위 이름 → 「내 정보 · 비밀번호」에서 바꿉니다. 잊었으면 관리자에게 알려 주세요.',
+        '30분 동안 움직임이 없으면 이 기기에서만 자동으로 로그아웃됩니다. 입력한 자료는 브라우저에 남아 있습니다.',
+        '관리자는 「관리」에서 가입한 사람을 승인하고, 다른 사람을 관리자로 지정하거나 사용을 중지할 수 있습니다.',
+        '이 도구는 로그인 서버와 저장소를 회사 계정으로 옮겨 그대로 쓸 수 있습니다(저장소의 「내 깃허브로 옮기기」 안내).'])) +
+      ((G.limits || []).length ? sec('limits', '이번 판에서 하지 않는 것', li(G.limits)) : '') +
+      (S.plan ? '<p class="kp-foot">더 자세한 처리 흐름 · 구성 · 화면 설계는 <a href="' + esc(S.plan) + '" target="_blank" rel="noopener">최종 기획서</a>에 있습니다.</p>' : '') +
+      '</div>';
+    pg.querySelectorAll('[data-kg]').forEach(function (a) { a.onclick = function (e) { e.preventDefault(); var t = pg.querySelector('#kg-' + a.getAttribute('data-kg')); if (t) t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }); }; });
+    pg.querySelector('[data-print]').onclick = function () { window.print(); };
+  }
+
+  // ─── 내 정보 ───
+  function pageMe(pg) {
+    var m = member || {}, roles = (m.roles || []).indexOf('admin') >= 0 ? '관리자' : '구성원';
+    pg.innerHTML = '<div class="kp">' + kpHead('내 정보', '내 정보 · 비밀번호', '이름 · 소속 · 연락처는 관리자 화면의 구성원 목록에 보입니다.') +
+      '<div class="kp-grid2"><section class="kp-card"><h2>기본 정보</h2>' +
+      '<dl class="kp-dl"><dt>이메일</dt><dd>' + esc(m.email || (me && me.email) || '') + '</dd><dt>상태</dt><dd><span class="kp-st is-' + esc(m.status) + '">' + esc(ST_KO[m.status] || m.status || '') + '</span> <span class="kp-st is-role">' + roles + '</span></dd></dl>' +
+      '<form class="ag-form kp-form" id="kmForm" novalidate>' +
+      '<label>이름<input name="name" maxlength="80" value="' + esc(m.name || '') + '" required></label>' +
+      '<label>소속(회사 · 부서)<input name="org" maxlength="120" value="' + esc(m.org || '') + '"></label>' +
+      '<label>연락처<input name="phone" type="tel" maxlength="40" value="' + esc(m.phone || '') + '"></label>' +
+      '<button class="kp-btn kp-primary" type="submit">저장</button><p class="ag-msg kp-msg" role="status" aria-live="polite"></p></form></section>' +
+      '<section class="kp-card"><h2>비밀번호 바꾸기</h2>' +
+      '<p class="kp-note">카카오로 로그인하는 계정은 비밀번호가 없습니다. 메일로 가입한 계정만 바꿉니다.</p>' +
+      '<form class="ag-form kp-form" id="kpForm" novalidate>' +
+      '<label>새 비밀번호 <small>8자 이상</small><input name="pw" type="password" autocomplete="new-password" minlength="8" required></label>' +
+      '<label>새 비밀번호 확인<input name="pw2" type="password" autocomplete="new-password" minlength="8" required></label>' +
+      '<button class="kp-btn kp-primary" type="submit">비밀번호 바꾸기</button><p class="ag-msg kp-msg" role="status" aria-live="polite"></p></form>' +
+      '<hr class="kp-hr"><button type="button" class="kp-btn kp-ghost" id="kmOut">로그아웃</button></section></div></div>';
+    var say = function (form, t, k) { var p = form.querySelector('.kp-msg'); p.textContent = t || ''; p.className = 'ag-msg kp-msg' + (k ? ' is-' + k : ''); };
+    var f1 = pg.querySelector('#kmForm');
+    f1.onsubmit = function (e) {
+      e.preventDefault(); var b = f1.querySelector('button'), patch = { name: f1.name.value.trim(), org: f1.org.value.trim(), phone: f1.phone.value.trim() };
+      if (!patch.name) return say(f1, '이름을 넣어 주세요.', 'err');
+      busy(b, true);
+      sb.rpc(RPC.save, { p_user: me.id, p_patch: patch }).then(function (r) {
+        busy(b, false); if (r.error) return say(f1, errText(r.error), 'err');
+        member.name = patch.name; member.org = patch.org; member.phone = patch.phone; say(f1, '저장했습니다.', 'ok');
+        var t = document.querySelector('.auth-user-t'); if (t) t.querySelector('b').textContent = patch.name;
+      });
+    };
+    var f2 = pg.querySelector('#kpForm');
+    f2.onsubmit = function (e) {
+      e.preventDefault(); var b = f2.querySelector('button'), pw = f2.pw.value;
+      if (pw.length < 8) return say(f2, '비밀번호는 8자 이상으로 해 주세요.', 'err');
+      if (pw !== f2.pw2.value) return say(f2, '비밀번호 확인이 다릅니다.', 'err');
+      busy(b, true);
+      sb.auth.updateUser({ password: pw }).then(function (r) { busy(b, false); if (r.error) return say(f2, errText(r.error), 'err'); f2.reset(); say(f2, '비밀번호를 바꿨습니다. 다음 로그인부터 새 비밀번호를 씁니다.', 'ok'); });
+    };
+    pg.querySelector('#kmOut').onclick = signOut;
+  }
+
+  // ─── 관리(관리자) ───
+  var adminUi = { tab: 'members', q: '', st: 'all', edit: '' };
+  function pageAdmin(pg) {
+    pg.innerHTML = '<div class="kp">' + kpHead('관리', '구성원 · 권한 관리', '가입한 사람을 승인하고 관리자를 지정합니다. 승인된 사람만 도구를 엽니다.') + '<p class="kp-note">불러오는 중…</p></div>';
+    Promise.all([
+      sb.from(T.members).select('user_id,name,org,phone,email,roles,status,requested_at,approved_at').order('requested_at', { ascending: false }),
+      sb.from(P + '_member_changes').select('id,user_id,fields,before,after,changed_name,changed_at').order('changed_at', { ascending: false }).limit(300)
+    ]).then(function (rs) {
+      if (rs[0].error) { pg.innerHTML = '<div class="kp">' + kpHead('관리', '구성원 · 권한 관리') + '<p class="ag-msg is-err">' + esc(errText(rs[0].error)) + '</p></div>'; return; }
+      drawAdmin(pg, rs[0].data || [], rs[1].error ? [] : (rs[1].data || []));
+    });
+  }
+  function drawAdmin(pg, all, changes) {
+    var cnt = function (f) { return all.filter(f).length; };
+    var isAdm = function (m) { return (m.roles || []).indexOf('admin') >= 0; };
+    var stats = [['전체', all.length, ''], ['승인 대기', cnt(function (m) { return m.status === 'pending'; }), 'pending'], ['사용', cnt(function (m) { return m.status === 'active'; }), 'active'],
+      ['중지', cnt(function (m) { return m.status === 'disabled'; }), 'disabled'], ['관리자', cnt(function (m) { return m.status === 'active' && isAdm(m); }), 'admin']];
+    var q = adminUi.q.toLowerCase(), list = all.filter(function (m) {
+      if (adminUi.st === 'admin' ? !(m.status === 'active' && isAdm(m)) : (adminUi.st !== 'all' && m.status !== adminUi.st)) return false;
+      return !q || [m.name, m.org, m.email, m.phone].join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+    var nameOf = {}; all.forEach(function (m) { nameOf[m.user_id] = m.name || m.email; });
+    var rows = list.map(function (m) {
+      var a = isAdm(m), self = me && m.user_id === me.id, acts = [];
+      if (m.status === 'pending') { acts.push(['승인', { status: 'active' }, 'kp-primary']); acts.push(['거절', { status: 'disabled' }]); }
+      if (m.status === 'active') { acts.push([a ? '관리자 해제' : '관리자로 지정', { roles: a ? [] : ['admin'] }]); if (!self) acts.push(['사용 중지', { status: 'disabled' }]); }
+      if (m.status === 'disabled') acts.push(['다시 사용', { status: 'active' }]);
+      var editing = adminUi.edit === m.user_id;
+      return '<tr' + (m.status === 'pending' ? ' class="is-pending"' : '') + '><td><div class="kp-who"><span class="auth-av">' + esc(initials(m.name || m.email)) + '</span><div><b>' + esc(m.name || '(이름 없음)') + '</b>' + (self ? ' <small>(나)</small>' : '') + '<small>' + esc(m.email) + '</small></div></div></td>' +
+        '<td>' + (editing ? '<input class="kp-in" data-f="org" value="' + esc(m.org) + '" placeholder="소속"><input class="kp-in" data-f="phone" value="' + esc(m.phone) + '" placeholder="연락처">' : esc(m.org) + '<small>' + esc(m.phone) + '</small>') + '</td>' +
+        '<td><span class="kp-st is-' + m.status + '">' + ST_KO[m.status] + '</span>' + (a ? ' <span class="kp-st is-role">관리자</span>' : '') + '</td>' +
+        '<td><small>신청 ' + esc(fmtTime(m.requested_at)) + (m.approved_at ? '<br>승인 ' + esc(fmtTime(m.approved_at)) : '') + '</small></td>' +
+        '<td class="kp-acts" data-u="' + m.user_id + '">' + (editing ? '<input class="kp-in" data-f="name" value="' + esc(m.name) + '" placeholder="이름"><button type="button" class="kp-btn kp-primary kp-sm" data-save>저장</button><button type="button" class="kp-btn kp-sm" data-cancel>취소</button>' :
+          acts.map(function (x) { return '<button type="button" class="kp-btn kp-sm ' + (x[2] || '') + '" data-p=\'' + esc(JSON.stringify(x[1])) + '\'>' + x[0] + '</button>'; }).join('') +
+          '<button type="button" class="kp-btn kp-sm kp-ghost" data-edit>정보 고치기</button>') + '</td></tr>';
+    }).join('');
+    var label = { name: '이름', org: '소속', phone: '연락처', roles: '권한', status: '상태' };
+    var val = function (k, v) { if (k === 'status') return ST_KO[v] || v || '—'; if (k === 'roles') return (v || []).indexOf ? ((v || []).indexOf('admin') >= 0 ? '관리자' : '일반') : '—'; return v == null || v === '' ? '—' : v; };
+    var hist = changes.map(function (c) {
+      return '<tr><td><small>' + esc(fmtTime(c.changed_at)) + '</small></td><td><b>' + esc(nameOf[c.user_id] || '(알 수 없음)') + '</b></td><td>' +
+        (c.fields || []).map(function (k) { return '<span class="kp-chg">' + esc(label[k] || k) + ' ' + esc(val(k, (c.before || {})[k])) + ' → <b>' + esc(val(k, (c.after || {})[k])) + '</b></span>'; }).join('') +
+        '</td><td>' + esc(c.changed_name || '') + '</td></tr>';
+    }).join('');
+    pg.innerHTML = '<div class="kp">' + kpHead('관리', '구성원 · 권한 관리', '가입한 사람을 승인하고 관리자를 지정합니다. 승인된 사람만 도구를 엽니다.') +
+      '<div class="kp-stats">' + stats.map(function (s) { return '<button type="button" class="kp-stat' + (adminUi.st === (s[2] || 'all') ? ' is-on' : '') + '" data-st="' + (s[2] || 'all') + '"><span>' + s[0] + '</span><b>' + s[1] + '</b></button>'; }).join('') + '</div>' +
+      '<div class="kp-tabs" role="tablist"><button type="button" role="tab" data-tab="members" aria-selected="' + (adminUi.tab === 'members') + '">구성원</button>' +
+      '<button type="button" role="tab" data-tab="history" aria-selected="' + (adminUi.tab === 'history') + '">변경 이력 ' + changes.length + '</button>' +
+      '<button type="button" role="tab" data-tab="help" aria-selected="' + (adminUi.tab === 'help') + '">관리자 안내</button></div>' +
+      '<p class="ag-msg kp-msg" role="status" aria-live="polite"></p>' +
+      (adminUi.tab === 'members' ? '<section class="kp-card kp-flat"><div class="kp-tools"><input class="kp-in kp-search" type="search" placeholder="이름 · 소속 · 메일 · 연락처 검색" value="' + esc(adminUi.q) + '">' +
+        '<button type="button" class="kp-btn kp-ghost" data-csv>CSV 내려받기</button></div>' +
+        (rows ? '<div class="kp-tw"><table class="kp-table kp-members"><thead><tr><th>이름 · 메일</th><th>소속 · 연락처</th><th>상태</th><th>일시</th><th>처리</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '<p class="kp-note">해당하는 구성원이 없습니다.</p>') + '</section>' : '') +
+      (adminUi.tab === 'history' ? '<section class="kp-card kp-flat">' + (hist ? '<div class="kp-tw"><table class="kp-table"><thead><tr><th>일시</th><th>대상</th><th>바뀐 것</th><th>처리한 사람</th></tr></thead><tbody>' + hist + '</tbody></table></div>' : '<p class="kp-note">아직 변경 이력이 없습니다.</p>') + '</section>' : '') +
+      (adminUi.tab === 'help' ? '<section class="kp-card"><ul class="kp-list">' +
+        '<li>가입한 사람은 「승인 대기」로 들어옵니다. 회사 메일 · 이름 · 소속을 보고 본인이 맞으면 「승인」, 아니면 「거절」합니다.</li>' +
+        '<li>「관리자로 지정」하면 그 사람도 이 화면에서 승인 · 지정 · 중지를 할 수 있습니다. 팀장 · 담당자를 관리자로 두면 편합니다.</li>' +
+        '<li>퇴사 · 이동한 사람은 지우지 말고 「사용 중지」합니다. 언제든 「다시 사용」으로 되돌릴 수 있고 이력이 남습니다.</li>' +
+        '<li>마지막 관리자는 해제하거나 중지할 수 없습니다. 다른 사람을 관리자로 먼저 지정해 주세요.</li>' +
+        '<li>비밀번호는 관리자가 볼 수 없습니다. 잊은 사람은 회사 계정으로 옮긴 뒤 Supabase 화면에서 재설정 메일을 보내거나, 새 메일로 다시 가입해 승인합니다.</li>' +
+        '<li>모든 승인 · 권한 · 정보 변경은 「변경 이력」에 일시와 처리한 사람이 남습니다.</li></ul></section>' : '') +
+      '</div>';
+    var redraw = function () { drawAdmin(pg, all, changes); };
+    pg.querySelectorAll('[data-st]').forEach(function (b) { b.onclick = function () { adminUi.st = b.getAttribute('data-st'); adminUi.tab = 'members'; redraw(); }; });
+    pg.querySelectorAll('[data-tab]').forEach(function (b) { b.onclick = function () { adminUi.tab = b.getAttribute('data-tab'); redraw(); }; });
+    var sx = pg.querySelector('.kp-search');
+    if (sx) sx.oninput = function () { adminUi.q = sx.value; var pos = sx.selectionStart; redraw(); var n = pg.querySelector('.kp-search'); n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} };
+    var csv = pg.querySelector('[data-csv]');
+    if (csv) csv.onclick = function () {
+      var lines = [['이름', '소속', '연락처', '메일', '상태', '권한', '신청', '승인']].concat(all.map(function (m) { return [m.name, m.org, m.phone, m.email, ST_KO[m.status], isAdm(m) ? '관리자' : '', fmtTime(m.requested_at), fmtTime(m.approved_at)]; }));
+      var text = '﻿' + lines.map(function (r) { return r.map(function (x) { x = String(x == null ? '' : x); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(','); }).join('\r\n');
+      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })); a.download = (S.title || '구성원') + '_구성원.csv'; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    };
+    var say = function (t, k) { var p = pg.querySelector('.kp-msg'); p.textContent = t || ''; p.className = 'ag-msg kp-msg' + (k ? ' is-' + k : ''); };
+    var save = function (uid, patch, btn) {
+      busy(btn, true);
+      sb.rpc(RPC.save, { p_user: uid, p_patch: patch }).then(function (x) {
+        busy(btn, false);
+        if (x.error) return say(errText(x.error), 'err');
+        adminUi.edit = '';
+        if (me && uid === me.id) { route(); return; }
+        pageAdmin(pg); refreshPendingCount();
+      });
+    };
+    pg.querySelectorAll('.kp-acts').forEach(function (td) {
+      var uid = td.getAttribute('data-u');
+      td.querySelectorAll('[data-p]').forEach(function (b) { b.onclick = function () { save(uid, JSON.parse(b.getAttribute('data-p')), b); }; });
+      var ed = td.querySelector('[data-edit]'); if (ed) ed.onclick = function () { adminUi.edit = uid; redraw(); };
+      var cc = td.querySelector('[data-cancel]'); if (cc) cc.onclick = function () { adminUi.edit = ''; redraw(); };
+      var sv = td.querySelector('[data-save]');
+      if (sv) sv.onclick = function () {
+        var tr = td.closest('tr'), get = function (k) { var i = tr.querySelector('[data-f="' + k + '"]'); return i ? i.value.trim() : ''; };
+        if (!get('name')) return say('이름을 넣어 주세요.', 'err');
+        save(uid, { name: get('name'), org: get('org'), phone: get('phone') }, sv);
+      };
+    });
+  }
+
+  // ───────── 구성원 관리(관리자) — 옛 창(지금은 관리 페이지를 쓴다) ─────────
   var ST = { pending: '승인 대기', active: '사용', disabled: '중지' };
   function openMembers() {
     var box = document.getElementById('authAdmin');
@@ -560,6 +820,11 @@
   }
   ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (ev) { addEventListener(ev, bump, { passive: true }); });
 
+  if (LOCAL) {   // 내 PC: 로그인 없이 도구 + 「사용 방법」
+    member = { name: '내 PC', email: '', roles: [], status: 'active', local: true };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountShell); else mountShell();
+    return;
+  }
   // 다른 탭에서 로그아웃 · 로그인하면 따라간다
   sb.auth.onAuthStateChange(function (ev) {
     if (ev === 'SIGNED_OUT' && member) route();
