@@ -472,6 +472,7 @@
   // ───────── 상단 바 계정 칩 ─────────
   function isAdmin() { return !!(member && member.status === 'active' && (member.roles || []).indexOf('admin') >= 0); }
   function removeChip() {
+    if (typeof extCall === 'function' && document.getElementById('authChip')) extCall('unmount');
     ['authChip', 'kitNav'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); });
     var pg = document.getElementById('kitPage'), main = document.getElementById('main');
     if (pg) pg.remove(); if (main) main.hidden = false;
@@ -501,6 +502,16 @@
   // 위쪽 줄: 사용 방법 · 관리(관리자) · 사용자 메뉴 / 왼쪽: 「도움 · 관리」 묶음 / 키트 페이지(#/kit-guide · #/kit-me · #/kit-admin)
   // 앱 라우터는 모르는 주소를 받아도 주소를 바꾸지 않는다(15개 실측) — 그래서 #main 을 감추고 옆의 키트 칸을 보인다.
   var KIT = { 'kit-guide': '사용 방법', 'kit-me': '내 정보', 'kit-admin': '관리' };
+  var PAGES = { 'kit-guide': pageGuide, 'kit-me': pageMe, 'kit-admin': pageAdmin };
+  // 덧붙이는 기능(게시판 등)은 js/board.js 처럼 따로 두고 window.AUTH_KIT_EXT 에 함수를 넣어 둔다 → 아래 kitApi 로 페이지를 더한다
+  var EXT = [];
+  function addPage(key, title, fn, o) { KIT[key] = title; PAGES[key] = fn; EXT.push({ key: key, title: title, o: o || {} }); }
+  function extLinks(cls) {
+    return EXT.map(function (e) {
+      return '<a' + (cls ? ' class="' + cls + '"' : '') + ' href="#/' + e.key + '">' + icon(e.o.icon || 'doc', 'kit-ic') + '<span>' + esc(e.title) + '</span><span class="kit-ext-n" data-ext="' + e.key + '" hidden></span></a>';
+    }).join('');
+  }
+  function extCall(name, a, b) { EXT.forEach(function (e) { if (typeof e.o[name] === 'function') { try { e.o[name](a, b); } catch (err) { if (window.console) console.error(err); } } }); }
   var kitBound = false;
   function initials(n) { n = String(n || '').trim(); if (!n) return '나'; return /^[가-힣]{3,4}$/.test(n) ? n.slice(1, 3) : n.slice(0, /[가-힣]/.test(n) ? 2 : 2).toUpperCase(); }
   function mountShell() {
@@ -509,7 +520,7 @@
     var host = document.querySelector('.topbar') || document.body, adm = isAdmin(), local = !!member.local;
     var c = document.createElement('div');
     c.id = 'authChip'; c.className = 'auth-chip' + (host === document.body ? ' is-float' : '');
-    c.innerHTML = '<a class="auth-chip-link" href="#/kit-guide">' + icon('doc', 'kit-ic') + '<span>사용 방법</span></a>' +
+    c.innerHTML = (local ? '' : extLinks('auth-chip-link')) + '<a class="auth-chip-link" href="#/kit-guide">' + icon('doc', 'kit-ic') + '<span>사용 방법</span></a>' +
       (adm ? '<a class="auth-chip-link" href="#/kit-admin">' + icon('shield', 'kit-ic') + '<span>관리</span><span class="auth-chip-n" hidden></span></a>' : '') +
       (local ? '' : '<div class="auth-user"><button type="button" class="auth-user-btn" aria-haspopup="menu" aria-expanded="false">' +
       '<span class="auth-av" aria-hidden="true">' + esc(initials(member.name || member.email)) + '</span>' +
@@ -533,7 +544,7 @@
     var nav = document.getElementById('nav');
     if (nav) {
       var g = document.createElement('nav'); g.id = 'kitNav'; g.className = 'kit-nav'; g.setAttribute('aria-label', '도움 · 관리');
-      g.innerHTML = '<p class="kit-nav-t">' + (local ? '도움' : '도움 · 관리') + '</p>' +
+      g.innerHTML = '<p class="kit-nav-t">' + (local ? '도움' : '도움 · 관리') + '</p>' + (local ? '' : extLinks('')) +
         '<a href="#/kit-guide">' + icon('doc', 'kit-ic') + '<span>사용 방법</span></a>' +
         (local ? '' : '<a href="#/kit-me">' + icon('users', 'kit-ic') + '<span>내 정보</span></a>') +
         (adm ? '<a href="#/kit-admin">' + icon('shield', 'kit-ic') + '<span>관리</span><span class="auth-chip-n" hidden></span></a>' : '');
@@ -546,7 +557,7 @@
       pg.setAttribute('aria-live', 'polite'); main.parentNode.insertBefore(pg, main.nextSibling);
     }
     if (!kitBound) { kitBound = true; addEventListener('hashchange', function () { if (member) kitRoute(); }); }
-    kitRoute(); if (!local) refreshPendingCount();
+    kitRoute(); if (!local) { refreshPendingCount(); extCall('mount'); }
   }
   function kitRoute() {
     var h = (location.hash || '').replace(/^#\/?/, '').split(/[?/]/)[0];
@@ -557,11 +568,11 @@
     });
     if (!pg || !main) return;
     root.classList.toggle('kit-page-on', on);
-    if (!on) { pg.hidden = true; pg.innerHTML = ''; main.hidden = false; return; }
+    if (!on) { pg.hidden = true; pg.innerHTML = ''; main.hidden = false; extCall('route', h, false); return; }
     main.hidden = true; pg.hidden = false;
-    ({ 'kit-guide': pageGuide, 'kit-me': pageMe, 'kit-admin': pageAdmin })[h](pg);
+    PAGES[h](pg);
     try { pg.focus({ preventScroll: true }); } catch (e) {}
-    window.scrollTo(0, 0);
+    window.scrollTo(0, 0); extCall('route', h, true);
   }
   function kpHead(kicker, title, sub) {
     return '<header class="kp-head"><p class="kp-kicker">' + esc(kicker) + '</p><h1>' + esc(title) + '</h1>' + (sub ? '<p class="kp-sub">' + esc(sub) + '</p>' : '') + '</header>';
@@ -819,6 +830,11 @@
     });
   }
   ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (ev) { addEventListener(ev, bump, { passive: true }); });
+
+  // 덧붙이는 기능에 건네는 것 — 로그인 연결(sb) · 표 접두사 · 지금 구성원 · 화면 도우미
+  var kitApi = { sb: sb, prefix: P, config: C, local: LOCAL, esc: esc, icon: icon, fmtTime: fmtTime, kpHead: kpHead, busy: busy, errText: errText,
+    member: function () { return member; }, user: function () { return me; }, isAdmin: isAdmin, addPage: addPage, go: function (h) { location.hash = '#/' + h; } };
+  (window.AUTH_KIT_EXT || []).forEach(function (f) { try { f(kitApi); } catch (err) { if (window.console) console.error(err); } });
 
   if (LOCAL) {   // 내 PC: 로그인 없이 도구 + 「사용 방법」
     member = { name: '내 PC', email: '', roles: [], status: 'active', local: true };

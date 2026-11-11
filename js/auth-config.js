@@ -8,6 +8,7 @@ window.AUTH_CONFIG = {
   "kakao": true,
   "idleMinutes": 30,
   "localBypass": true,
+  "board": true,
   "site": {
     "title": "프레스 예지보전",
     "summary": "프레스의 전압 · 전류 · 진동 · 온도 2초 센서 값을 ±3σ 관리도 · 온도 3구간으로 실시간 관리해 정상 / 이상 상태를 보고, 정비 · 고장 이력으로 라벨을 붙여 머신러닝 학습용 데이터셋을 만드는 예지보전 도구입니다.",
