@@ -504,3 +504,44 @@ html.auth-lock body { overflow: hidden; }
 .kp-members tr.is-pending td { background: color-mix(in srgb, var(--ag-warn-bg) 55%, #fff); }
 .kp-chg { display: inline-block; margin: 0 10px 4px 0; font-size: 13.5px; }
 @media print { .kit-shell .side, .kit-shell .sidebar, .kit-shell .topbar, .kp-toc, .kit-nav { display: none !important; } .kp-card { break-inside: avoid; border-color: #ccc; } }
+
+/* ───────── 첫 화면: 사진 슬라이드(hero_mode = slide) ───────── */
+.hp-hero-wrap { display: contents; }
+.hp-slide { background: var(--ag-navy-2); }
+.hp-slide::after { display: none; }
+.hp-sl-track { position: absolute; inset: 0; display: flex; transition: transform .9s cubic-bezier(.22, .7, .2, 1); will-change: transform; }
+.hp-sl { flex: 0 0 100%; background: center / cover no-repeat; }
+.hp-slide::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(95deg, color-mix(in srgb, var(--ag-navy-2) 92%, transparent) 0%, color-mix(in srgb, var(--ag-navy-2) 74%, transparent) 42%, color-mix(in srgb, var(--ag-navy-2) 22%, transparent) 78%, transparent 100%),
+              linear-gradient(0deg, rgba(0, 0, 0, .34) 0%, transparent 34%); }
+.hp-slide .hp-slide-in { z-index: 2; grid-template-columns: minmax(0, 1fr); min-height: clamp(480px, 70vh, 740px); padding-bottom: 150px; }
+.hp-slide .hp-hero-copy { max-width: 720px; }
+.hp-slide h1 { color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, .28); }
+.hp-slide .hp-lead, .hp-slide .hp-trust-chips li { color: rgba(255, 255, 255, .9); }
+.hp-sl-ctl { position: absolute; z-index: 3; left: 0; right: 0; bottom: 72px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.hp-sl-btn { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .45); background: rgba(10, 20, 40, .38); color: #fff; cursor: pointer; font: inherit; font-size: 13px; backdrop-filter: blur(6px); }
+.hp-sl-btn:hover { background: rgba(10, 20, 40, .6); border-color: #fff; }
+.hp-sl-btn:focus-visible, .hp-sl-dots button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.hp-flip { transform: scaleX(-1); }
+.hp-sl-dots { display: flex; align-items: center; gap: 4px; }
+.hp-sl-dots button { width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.hp-sl-dots button::before { content: ''; width: 26px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .42); transition: background .2s, width .2s; }
+.hp-sl-dots button[aria-current="true"]::before { background: #fff; width: 38px; }
+.hp-sl-cap { position: absolute; z-index: 3; right: var(--hp-pad, 20px); bottom: 82px; margin: 0; font-size: 13px; color: rgba(255, 255, 255, .8); max-width: 34ch; text-align: right; }
+.hp-sl-cap:empty { display: none; }
+.ag-light .hp-slide h1 { color: #fff; }
+.ag-light .hp-slide .hp-lead, .ag-light .hp-slide .hp-trust-chips li { color: rgba(255, 255, 255, .9); }
+@media (max-width: 899px) { .hp-sl-cap { display: none; } .hp-slide .hp-slide-in { min-height: 0; padding-bottom: 140px; } }
+@media (prefers-reduced-motion: reduce) { .hp-sl-track { transition: none; } }
+/* 관리자 「첫 화면」 */
+.ks-opts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 900px) { .ks-opts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ag-form .ks-opt { display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 1.5px solid var(--ag-line); border-radius: 12px; cursor: pointer; font-weight: 400; }
+.ks-opt:has(input:checked) { border-color: var(--ag-brand); background: color-mix(in srgb, var(--ag-brand) 6%, #fff); }
+.ks-opt.is-off { opacity: .6; cursor: not-allowed; }
+.ag-form .ks-opt input { width: 20px; height: 20px; padding: 0; margin-top: 2px; flex: none; }
+.ks-opt span { display: grid; gap: 4px; } .ks-opt b { font-size: 16px; color: var(--ag-ink); } .ks-opt small { font-size: 14px; line-height: 1.6; color: var(--ag-sub); }
+.ks-thumbs { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.ks-thumbs li { display: grid; gap: 6px; font-size: 13px; color: var(--ag-sub); }
+.ks-thumbs img { width: 100%; aspect-ratio: 16 / 7.5; object-fit: cover; border-radius: 10px; border: 1px solid #e2e8f0; display: block; }
+.kp code { padding: 1px 6px; border-radius: 6px; background: #eef2f6; font-size: .92em; }

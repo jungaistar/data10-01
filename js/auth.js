@@ -116,7 +116,7 @@
       '<path class="ag-line" d="' + d + '" pathLength="1"/>' + pts +
       '<circle class="ag-ring" cx="' + PTS[0][0] + '" cy="' + PTS[0][1] + '" r="10"/></g></svg>';
   }
-  function stopFx() { if (fxTimer) clearInterval(fxTimer); fxTimer = null; }
+  function stopFx() { if (fxTimer) clearInterval(fxTimer); fxTimer = null; if (typeof slTimer !== 'undefined' && slTimer) { clearInterval(slTimer); slTimer = null; } }
   function fx() {
     stopFx();
     gate.classList.toggle('ag-fx', !reduce && !played);   // 들어올 때 한 번만(탭을 오가도 다시 재생하지 않음)
@@ -197,6 +197,69 @@
     if (/재고|자재|발주|실사/.test(t)) return 'layers';
     return 'target';
   }
+  // ─── 첫 화면 모양: design(지금 디자인 + 효과) · slide(사진 3장이 옆으로 넘어감) ───
+  // 고르는 곳: 관리자 「첫 화면」 페이지 → Supabase 표 <접두사>_site_settings (supabase/site.sql). 표가 없으면 설정 파일의 landing.heroMode.
+  var HERO_KEY = 'kit.' + P + '.hero', slTimer = null;
+  function slides() { return (LD.slides || []).filter(function (x) { return x && x.image; }).slice(0, 5); }
+  function siteCache() { try { return JSON.parse(localStorage.getItem(HERO_KEY) || 'null') || {}; } catch (e) { return {}; } }
+  function heroMode() { var m = siteCache().hero_mode; if (!m || m === 'auto') m = LD.heroMode || 'design'; return m === 'slide' && slides().length ? 'slide' : 'design'; }
+  function slideOn() { return heroMode() === 'slide'; }
+  function slideSeconds() { var n = +siteCache().slide_seconds || +LD.slideSeconds || 5; return Math.max(3, Math.min(20, n)); }
+  function slideHero(eyebrow, head, lead, cta, trust, title) {
+    var sl = slides();
+    return '<section class="hp-hero hp-slide" id="hp-top" aria-roledescription="carousel" aria-label="' + esc(title) + ' 소개 사진">' +
+      '<div class="hp-sl-track" aria-hidden="true">' + sl.map(function (x) { return '<div class="hp-sl" style="background-image:url(&quot;' + esc(absUrl(x.image)) + '&quot;)"></div>'; }).join('') + '</div>' +
+      '<div class="hp-in hp-hero-in hp-slide-in"><div class="hp-hero-copy hp-rv">' + (eyebrow ? '<p class="hp-eyebrow">' + esc(eyebrow) + '</p>' : '') + '<h1>' + head + '</h1>' +
+      (lead ? '<p class="hp-lead">' + esc(lead) + '</p>' : '') + cta + trust + '</div></div>' +
+      (sl.length > 1 ? '<div class="hp-sl-ctl"><button type="button" class="hp-sl-btn" data-sl="prev" aria-label="이전 사진">' + icon('arrow', 'hp-ic-s hp-flip') + '</button>' +
+        '<div class="hp-sl-dots">' + sl.map(function (x, i) { return '<button type="button" data-sl="' + i + '" aria-label="사진 ' + (i + 1) + ' / ' + sl.length + (x.caption ? ' — ' + esc(x.caption) : '') + '"></button>'; }).join('') + '</div>' +
+        '<button type="button" class="hp-sl-btn" data-sl="next" aria-label="다음 사진">' + icon('arrow', 'hp-ic-s') + '</button>' +
+        '<button type="button" class="hp-sl-btn hp-sl-pause" data-sl="pause" aria-label="자동 넘김 멈춤" aria-pressed="false">Ⅱ</button></div>' : '') +
+      '<p class="hp-sl-cap" aria-live="polite"></p></section>';
+  }
+  function bindSlide() {
+    if (slTimer) clearInterval(slTimer); slTimer = null;
+    var box = gate.querySelector('.hp-slide'); if (!box) return;
+    var track = box.querySelector('.hp-sl-track'), n = track.children.length, i = 0, hold = false, userPause = false, sl = slides(), cap = box.querySelector('.hp-sl-cap');
+    function go(k, user) {
+      i = (k + n) % n; track.style.transform = 'translateX(' + (-100 * i) + '%)';
+      box.querySelectorAll('.hp-sl-dots button').forEach(function (d, j) { if (j === i) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); });
+      if (cap) cap.textContent = (sl[i] && sl[i].caption) || '';
+    }
+    go(0);
+    box.querySelectorAll('[data-sl]').forEach(function (b) {
+      b.onclick = function () {
+        var v = b.getAttribute('data-sl');
+        if (v === 'pause') { userPause = !userPause; b.setAttribute('aria-pressed', String(userPause)); b.setAttribute('aria-label', userPause ? '자동 넘김 다시 시작' : '자동 넘김 멈춤'); b.textContent = userPause ? '▶' : 'Ⅱ'; return; }
+        go(v === 'prev' ? i - 1 : v === 'next' ? i + 1 : +v, true);
+      };
+    });
+    box.addEventListener('mouseenter', function () { hold = true; }); box.addEventListener('mouseleave', function () { hold = false; });
+    box.addEventListener('focusin', function () { hold = true; }); box.addEventListener('focusout', function () { hold = false; });
+    var x0 = null;
+    box.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+    box.addEventListener('touchend', function (e) { if (x0 == null) return; var dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 44) go(dx < 0 ? i + 1 : i - 1, true); }, { passive: true });
+    if (n > 1 && !reduce) slTimer = setInterval(function () {
+      if (gate.hidden || !document.body.contains(box)) { clearInterval(slTimer); slTimer = null; return; }
+      if (hold || userPause || document.hidden || gate.classList.contains('hp-modal-open')) return;
+      go(i + 1);
+    }, slideSeconds() * 1000);
+  }
+  // Supabase 의 설정을 읽어 지금 화면과 다르면 바꿔 그린다(SQL 을 실행하지 않았으면 조용히 넘어간다)
+  var siteAsked = false;
+  function syncSite() {
+    if (siteAsked || !sb) return; siteAsked = true;
+    sb.rpc(P + '_site_public').then(function (r) {
+      if (r.error || !r.data) return;
+      var was = heroMode(), wasSec = slideSeconds();
+      try { localStorage.setItem(HERO_KEY, JSON.stringify({ hero_mode: r.data.hero_mode, slide_seconds: r.data.slide_seconds })); } catch (e) {}
+      if ((heroMode() !== was || slideSeconds() !== wasSec) && gate.querySelector('.hp') && !gate.hidden && !gate.classList.contains('hp-modal-open')) {
+        var y = gate.scrollTop, card = (gate.querySelector('#agModalBody') || {}).innerHTML || '';
+        gate.innerHTML = homeHtml(); bindHome(); gate.scrollTop = y;
+        var mb = gate.querySelector('#agModalBody'); if (mb && card) { mb.innerHTML = card; viewLogin('login'); }
+      }
+    });
+  }
   function absUrl(u) { try { return new URL(u, location.href).href; } catch (e) { return u; } }
   function homeHtml() {
     var L = LD, co = L.company || {}, title = S.title || document.title;
@@ -212,7 +275,7 @@
     var nav = '<header class="hp-nav"><div class="hp-in hp-nav-in">' +
       '<a class="hp-brand" href="#hp-top" aria-label="맨 위로">' + brand + (brand ? '<i class="hp-div" aria-hidden="true"></i>' : '') + tool + '</a>' +
       '<nav class="hp-links" aria-label="홈페이지 메뉴">' + (feats.length ? '<a href="#hp-features">기능</a>' : '') + (flow.length ? '<a href="#hp-flow">사용 순서</a>' : '') +
-      (S.screen && ((heroImg && !cover) || banner) ? '<a href="#hp-screen">화면</a>' : '') + (S.plan ? '<a href="' + esc(S.plan) + '">기획서</a>' : '') + '</nav>' +
+      (S.screen && ((heroImg && !cover) || banner || slideOn()) ? '<a href="#hp-screen">화면</a>' : '') + (S.plan ? '<a href="' + esc(S.plan) + '">기획서</a>' : '') + '</nav>' +
       '<div class="hp-acts"><button type="button" class="hp-btn hp-ghost" data-login="login">로그인</button>' +
       '<button type="button" class="hp-btn hp-primary" data-login="signup">시작하기</button></div></div></header>';
     var cta = '<div class="hp-cta-row"><button type="button" class="hp-btn hp-primary hp-lg" data-login="login">로그인하고 시작하기 ' + icon('arrow', 'hp-ic-s') + '</button>' +
@@ -251,7 +314,7 @@
       '<ol class="hp-steps">' + flow.map(function (st, i) {
         return '<li class="hp-step hp-rv"><span class="hp-step-n">' + (i + 1) + '</span><h3>' + esc(st.step) + '</h3>' + (st.desc ? '<p>' + esc(st.desc) + '</p>' : '') + '</li>';
       }).join('') + '</ol></div></section>' : '';
-    var screenH = S.screen && ((heroImg && !cover) || banner) ? '<section class="hp-sec" id="hp-screen"><div class="hp-in"><div class="hp-head hp-rv"><p class="hp-kicker">실제 화면</p><h2>한 화면에서 확인합니다</h2></div>' +
+    var screenH = S.screen && ((heroImg && !cover) || banner || slideOn()) ? '<section class="hp-sec" id="hp-screen"><div class="hp-in"><div class="hp-head hp-rv"><p class="hp-kicker">실제 화면</p><h2>한 화면에서 확인합니다</h2></div>' +
       '<div class="hp-screen hp-rv">' + frame(S.screen, title + ' 실제 화면') + '<p class="hp-cap">가상 예제 데이터로 찍은 화면입니다.</p></div></div></section>' : '';
     var trustH = '<section class="hp-sec hp-alt"><div class="hp-in"><div class="hp-head hp-rv"><p class="hp-kicker">믿고 쓰는 이유</p><h2>우리 팀만, 안전하게</h2></div><div class="hp-trust">' +
       '<div class="hp-tr hp-rv">' + icon('shield') + '<h3>승인제 접근</h3><p>회사 메일이나 개인 메일로 가입한 뒤 관리자가 승인한 구성원만 도구를 엽니다. 관리자는 팀원의 신청을 직접 승인합니다.</p></div>' +
@@ -265,7 +328,8 @@
       '<p class="hp-foot-s">© ' + new Date().getFullYear() + ' ' + esc(co.name || title) + ' · 업무 자료는 서버로 보내지 않고 이 브라우저에 저장합니다</p></div></footer>';
     var modal = '<div class="hp-modal" id="agModal" hidden><div class="hp-dialog" role="dialog" aria-modal="true" aria-label="로그인">' +
       '<button type="button" class="hp-x" data-close aria-label="닫기">×</button><div id="agModalBody"></div></div></div>';
-    return '<div class="hp">' + nav + hero + goalsH + featH + flowH + screenH + trustH + band + foot + '</div>' + modal;
+    if (slideOn()) hero = slideHero(eyebrow, head, lead, cta, trust, title);
+    return '<div class="hp">' + nav + '<div id="hpHero" class="hp-hero-wrap" data-mode="' + heroMode() + '">' + hero + '</div>' + goalsH + featH + flowH + screenH + trustH + band + foot + '</div>' + modal;
   }
   function openModal() {
     var m = gate.querySelector('#agModal'); if (!m) return;
@@ -274,6 +338,7 @@
   }
   function closeModal() { var m = gate.querySelector('#agModal'); if (m) m.hidden = true; gate.classList.remove('hp-modal-open'); }
   function bindHome() {
+    bindSlide(); syncSite();
     gate.querySelectorAll('[data-login]').forEach(function (b) {
       b.onclick = function () { viewLogin(b.getAttribute('data-login'), null, true); };
     });
@@ -501,8 +566,9 @@
   // ───────── 도구 화면 틀(로그인 뒤) ─────────
   // 위쪽 줄: 사용 방법 · 관리(관리자) · 사용자 메뉴 / 왼쪽: 「도움 · 관리」 묶음 / 키트 페이지(#/kit-guide · #/kit-me · #/kit-admin)
   // 앱 라우터는 모르는 주소를 받아도 주소를 바꾸지 않는다(15개 실측) — 그래서 #main 을 감추고 옆의 키트 칸을 보인다.
-  var KIT = { 'kit-guide': '사용 방법', 'kit-me': '내 정보', 'kit-admin': '관리' };
-  var PAGES = { 'kit-guide': pageGuide, 'kit-me': pageMe, 'kit-admin': pageAdmin };
+  var KIT = { 'kit-guide': '사용 방법', 'kit-me': '내 정보', 'kit-admin': '관리', 'kit-site': '첫 화면' };
+  var PAGES = { 'kit-guide': pageGuide, 'kit-me': pageMe, 'kit-admin': pageAdmin, 'kit-site': pageSite };
+  var ADMIN_ONLY = { 'kit-admin': 1, 'kit-site': 1 };
   // 덧붙이는 기능(게시판 등)은 js/board.js 처럼 따로 두고 window.AUTH_KIT_EXT 에 함수를 넣어 둔다 → 아래 kitApi 로 페이지를 더한다
   var EXT = [];
   function addPage(key, title, fn, o) { KIT[key] = title; PAGES[key] = fn; EXT.push({ key: key, title: title, o: o || {} }); }
@@ -528,7 +594,7 @@
       '<svg class="auth-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
       '<div class="auth-menu" role="menu" hidden><p class="auth-menu-h">' + esc(member.email || '') + '</p>' +
       '<a role="menuitem" href="#/kit-me">' + icon('users', 'kit-ic') + '내 정보 · 비밀번호</a>' +
-      (adm ? '<a role="menuitem" href="#/kit-admin">' + icon('shield', 'kit-ic') + '관리 · 구성원 승인</a>' : '') +
+      (adm ? '<a role="menuitem" href="#/kit-admin">' + icon('shield', 'kit-ic') + '관리 · 구성원 승인</a><a role="menuitem" href="#/kit-site">' + icon('camera', 'kit-ic') + '첫 화면 모양</a>' : '') +
       '<a role="menuitem" href="#/kit-guide">' + icon('doc', 'kit-ic') + '사용 방법</a>' +
       '<button type="button" role="menuitem" id="authOut">' + icon('move', 'kit-ic') + '로그아웃</button></div></div>');
     host.appendChild(c);
@@ -547,7 +613,8 @@
       g.innerHTML = '<p class="kit-nav-t">' + (local ? '도움' : '도움 · 관리') + '</p>' + (local ? '' : extLinks('')) +
         '<a href="#/kit-guide">' + icon('doc', 'kit-ic') + '<span>사용 방법</span></a>' +
         (local ? '' : '<a href="#/kit-me">' + icon('users', 'kit-ic') + '<span>내 정보</span></a>') +
-        (adm ? '<a href="#/kit-admin">' + icon('shield', 'kit-ic') + '<span>관리</span><span class="auth-chip-n" hidden></span></a>' : '');
+        (adm ? '<a href="#/kit-admin">' + icon('shield', 'kit-ic') + '<span>관리</span><span class="auth-chip-n" hidden></span></a>' +
+          '<a href="#/kit-site">' + icon('camera', 'kit-ic') + '<span>첫 화면</span></a>' : '');
       nav.parentNode.insertBefore(g, nav.nextSibling);
     }
     // 키트 페이지 칸 — 앱 본문(#main)과 같은 틀 클래스를 써서 여백 · 폭이 같다
@@ -562,7 +629,7 @@
   function kitRoute() {
     var h = (location.hash || '').replace(/^#\/?/, '').split(/[?/]/)[0];
     var pg = document.getElementById('kitPage'), main = document.getElementById('main');
-    var on = !!KIT[h] && (h !== 'kit-admin' || isAdmin()) && (h === 'kit-guide' || !member.local);
+    var on = !!KIT[h] && (!ADMIN_ONLY[h] || isAdmin()) && (h === 'kit-guide' || !member.local);
     document.querySelectorAll('#kitNav a, #authChip .auth-chip-link').forEach(function (a) {
       if (a.getAttribute('href') === '#/' + h && on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
@@ -662,6 +729,44 @@
       sb.auth.updateUser({ password: pw }).then(function (r) { busy(b, false); if (r.error) return say(f2, errText(r.error), 'err'); f2.reset(); say(f2, '비밀번호를 바꿨습니다. 다음 로그인부터 새 비밀번호를 씁니다.', 'ok'); });
     };
     pg.querySelector('#kmOut').onclick = signOut;
+  }
+
+  // ─── 첫 화면 모양(관리자) ───
+  function pageSite(pg) {
+    var TS = P + '_site_settings', sl = slides();
+    var draw = function (row, missing) {
+      var mode = (row && row.hero_mode !== 'auto' && row.hero_mode) || LD.heroMode || 'design', sec = (row && row.slide_seconds) || slideSeconds();
+      var opt = function (v, t, d, off) {
+        return '<label class="ks-opt' + (off ? ' is-off' : '') + '"><input type="radio" name="hero_mode" value="' + v + '"' + (mode === v ? ' checked' : '') + (off ? ' disabled' : '') + '>' +
+          '<span><b>' + t + '</b><small>' + d + '</small></span></label>';
+      };
+      pg.innerHTML = '<div class="kp">' + kpHead('첫 화면', '로그인 전 첫 화면 모양', '방문자가 로그인하기 전에 보는 맨 위 영역을 고릅니다. 고르면 모든 방문자에게 바뀝니다.') +
+        (missing ? '<section class="kp-card"><h2>준비가 필요합니다</h2><ol class="kp-steps"><li><b>Supabase → SQL Editor</b><span>이 저장소의 <code>supabase/site.sql</code> 전체를 붙여 넣고 Run 을 누릅니다(<code>auth.sql</code> 다음).</span></li>' +
+          '<li><b>새로 고침</b><span>이 화면을 새로 고치면 고를 수 있습니다. 그 전에는 설정 파일(<code>js/auth-config.js</code>)의 <code>landing.heroMode</code> 값을 씁니다.</span></li></ol></section>' : '') +
+        '<section class="kp-card"><form class="ag-form kp-form" id="ksForm" novalidate><div class="ks-opts">' +
+        opt('design', '디자인 + 움직임', '회사 색 바탕에 실제 화면 카드와 떠 있는 기능 표시, 들어올 때 떠오르는 효과. 사진이 없어도 됩니다.') +
+        opt('slide', '사진 슬라이드', '사진 ' + (sl.length || 3) + '장이 옆으로 넘어갑니다. 제목과 「로그인」 단추는 사진 위에 놓입니다.' + (sl.length ? '' : ' (사진이 아직 없습니다)'), !sl.length) + '</div>' +
+        '<label>사진이 넘어가는 간격(초) <small>3 ~ 20</small><input name="slide_seconds" type="number" min="3" max="20" value="' + esc(sec) + '"></label>' +
+        '<button class="kp-btn kp-primary" type="submit"' + (missing ? ' disabled' : '') + '>저장</button><p class="ag-msg kp-msg" role="status" aria-live="polite"></p></form></section>' +
+        '<section class="kp-card"><h2>슬라이드 사진</h2>' + (sl.length ? '<ul class="ks-thumbs">' + sl.map(function (x, i) { return '<li><img src="' + esc(x.image) + '" alt="슬라이드 ' + (i + 1) + '" loading="lazy"><span>' + esc(x.image) + '</span></li>'; }).join('') + '</ul>' : '<p class="kp-note">아직 사진이 없습니다.</p>') +
+        '<p class="kp-note">사진을 바꾸려면 <code>images/slide-1.jpg</code> · <code>slide-2.jpg</code> · <code>slide-3.jpg</code> 를 같은 이름으로 바꿔 올립니다(가로 1920 × 세로 900 안팎, 가로로 긴 사진). ' +
+        '이름이나 장수를 바꾸려면 <code>js/auth-config.js</code> 의 <code>landing.slides</code> 를 고칩니다.</p>' +
+        '<p class="kp-note">같은 값이 Supabase 「Table Editor」의 <code>' + esc(TS) + '</code> 표 한 줄(<code>hero_mode</code> · <code>slide_seconds</code>)에 있습니다.</p></section></div>';
+      var f = pg.querySelector('#ksForm'), say = function (t, k) { var m = f.querySelector('.kp-msg'); m.textContent = t; m.className = 'ag-msg kp-msg is-' + (k || 'err'); };
+      f.onsubmit = function (e) {
+        e.preventDefault(); var b = f.querySelector('button'), v = { hero_mode: f.hero_mode.value || 'design', slide_seconds: Math.round(+f.slide_seconds.value) };
+        if (!(v.slide_seconds >= 3 && v.slide_seconds <= 20)) return say('간격은 3 ~ 20 초로 해 주세요.');
+        busy(b, true);
+        sb.from(TS).update(v).eq('id', 1).select('hero_mode,slide_seconds').then(function (r) {
+          busy(b, false); if (r.error) return say(errText(r.error));
+          if (!r.data || !r.data.length) return say('저장되지 않았습니다. 관리 권한을 확인해 주세요.');
+          try { localStorage.setItem(HERO_KEY, JSON.stringify(r.data[0])); } catch (e2) {}
+          say('저장했습니다. 로그아웃하거나 다른 브라우저에서 첫 화면을 열면 바뀐 모양이 보입니다.', 'ok');
+        });
+      };
+    };
+    pg.innerHTML = '<div class="kp">' + kpHead('첫 화면', '로그인 전 첫 화면 모양') + '<p class="kp-note">불러오는 중…</p></div>';
+    sb.from(TS).select('hero_mode,slide_seconds').eq('id', 1).maybeSingle().then(function (r) { draw(r.data, !!r.error || !r.data); });
   }
 
   // ─── 관리(관리자) ───
