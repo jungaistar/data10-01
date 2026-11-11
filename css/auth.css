@@ -510,7 +510,7 @@ html.auth-lock body { overflow: hidden; }
 .hp-slide { background: var(--ag-navy-2); }
 .hp-slide::after { display: none; }
 .hp-sl-track { position: absolute; inset: 0; display: flex; transition: transform .9s cubic-bezier(.22, .7, .2, 1); will-change: transform; }
-.hp-sl { flex: 0 0 100%; background: center / cover no-repeat; }
+.hp-sl { flex: 0 0 100%; background: 78% center / cover no-repeat; }   /* 왼쪽에 제목이 놓이므로 사진의 오른쪽(주제)을 살린다 */
 .hp-slide::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background: linear-gradient(95deg, color-mix(in srgb, var(--ag-navy-2) 92%, transparent) 0%, color-mix(in srgb, var(--ag-navy-2) 74%, transparent) 42%, color-mix(in srgb, var(--ag-navy-2) 22%, transparent) 78%, transparent 100%),
               linear-gradient(0deg, rgba(0, 0, 0, .34) 0%, transparent 34%); }
@@ -545,3 +545,14 @@ html.auth-lock body { overflow: hidden; }
 .ks-thumbs li { display: grid; gap: 6px; font-size: 13px; color: var(--ag-sub); }
 .ks-thumbs img { width: 100%; aspect-ratio: 16 / 7.5; object-fit: cover; border-radius: 10px; border: 1px solid #e2e8f0; display: block; }
 .kp code { padding: 1px 6px; border-radius: 6px; background: #eef2f6; font-size: .92em; }
+
+/* 밝은 사진(slides[].tone = light): 왼쪽을 흰 면으로 받치고 글자를 어둡게 */
+.hp-slide::before, .hp-slide h1, .hp-slide .hp-lead, .hp-slide .hp-trust-chips li, .hp-slide .hp-eyebrow { transition: color .5s, background .5s, opacity .5s; }
+.hp-slide.hp-sl-light::before { background: linear-gradient(95deg, rgba(255, 255, 255, .9) 0%, rgba(255, 255, 255, .72) 40%, rgba(255, 255, 255, .12) 72%, transparent 100%); }
+.hp-slide.hp-sl-light h1 { color: var(--ag-navy); text-shadow: 0 1px 12px rgba(255, 255, 255, .7); }
+.hp-slide.hp-sl-light .hp-lead, .hp-slide.hp-sl-light .hp-trust-chips li { color: var(--ag-ink); }
+.hp-slide.hp-sl-light .hp-eyebrow { color: var(--ag-brand-d); }
+.hp-slide.hp-sl-light .hp-line { color: var(--ag-navy); border-color: color-mix(in srgb, var(--ag-navy) 45%, transparent); background: rgba(255, 255, 255, .55); }
+.hp-slide.hp-sl-light .hp-sl-cap { color: var(--ag-ink); }
+.hp-slide.hp-sl-light .hp-sl-dots button::before { background: color-mix(in srgb, var(--ag-navy) 35%, transparent); }
+.hp-slide.hp-sl-light .hp-sl-dots button[aria-current="true"]::before { background: var(--ag-navy); }

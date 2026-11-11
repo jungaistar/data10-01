@@ -225,6 +225,7 @@
       i = (k + n) % n; track.style.transform = 'translateX(' + (-100 * i) + '%)';
       box.querySelectorAll('.hp-sl-dots button').forEach(function (d, j) { if (j === i) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); });
       if (cap) cap.textContent = (sl[i] && sl[i].caption) || '';
+      box.classList.toggle('hp-sl-light', !!(sl[i] && sl[i].tone === 'light'));   // 밝은 사진이면 글자를 어둡게
     }
     go(0);
     box.querySelectorAll('[data-sl]').forEach(function (b) {
