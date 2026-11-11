@@ -206,7 +206,7 @@
     var feats = (S.features || []).slice(0, 6), flow = (S.flow || []).slice(0, 6), goals = (S.goals || []).slice(0, 3);
     var banner = L.image && L.imageMode === 'banner', cover = L.image && L.imageMode === 'cover';
     var heroImg = L.hero || (cover ? L.image : '');
-    var brand = co.logo ? '<img class="hp-logo" src="' + esc(co.logo) + '" alt="' + esc(co.name || '') + '">' :
+    var brand = co.logo ? '<img class="hp-logo" src="' + esc(co.logo) + '" alt="' + esc(co.name || '') + '"' + (co.logoH > 0 ? ' style="height:' + Math.min(48, +co.logoH) + 'px"' : '') + '>' :
       (co.name ? '<span class="hp-wordmark">' + esc(co.name) + (co.en ? '<small>' + esc(co.en) + '</small>' : '') + '</span>' : '');
     var tool = '<span class="hp-tool"><span class="hp-mark">' + icon(iconFor(title + ' ' + (feats[0] || {}).name), 'hp-mark-ic') + '</span><span class="hp-tool-t">' + esc(title) + '</span></span>';
     var nav = '<header class="hp-nav"><div class="hp-in hp-nav-in">' +

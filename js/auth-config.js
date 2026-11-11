@@ -208,8 +208,10 @@ window.AUTH_CONFIG = {
         "accent": "#5fe35f"
       },
       "company": {
-        "name": "HD현대",
-        "en": "HD HYUNDAI"
+        "name": "HD건설기계",
+        "en": "HD CONSTRUCTION EQUIPMENT",
+        "logo": "images/logo.png",
+        "logoH": 24
       }
     }
   }
