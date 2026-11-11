@@ -12,21 +12,28 @@
   <meta property="og:description" content="프레스의 전압 · 전류 · 진동 · 온도 2초 센서 값을 ±3σ 관리도 · 온도 3구간으로 실시간 관리해 정상 / 이상 상태를 보고, 정비 · 고장 이력으로 라벨을 붙여 머신러닝 학습용 데이터셋을 만드는 예지보전 도구입니다.">
   <meta property="og:url" content="https://data10-01.jobability.co.kr/">
   <meta property="og:image" content="https://data10-01.jobability.co.kr/og-image.png">
+  <meta property="og:image:secure_url" content="https://data10-01.jobability.co.kr/og-image.png">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="HD건설기계 · 프레스 예지보전">
+  <meta property="og:locale" content="ko_KR">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="HD건설기계 · 프레스 예지보전">
+  <meta name="twitter:description" content="프레스의 전압 · 전류 · 진동 · 온도 2초 센서 값을 ±3σ 관리도 · 온도 3구간으로 실시간 관리해 정상 / 이상 상태를 보고, 정비 · 고장 이력으로 라벨을 붙여 머신러닝 학습용 데이터셋을 만드는 예지보전 도구입니다.">
+  <meta name="twitter:image" content="https://data10-01.jobability.co.kr/og-image.png">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <!-- /seo-kit -->
   <meta name="description" content="프레스의 전압·전류·진동·온도 2초 센서 로그로 실시간 ±3σ 관리도·온도 3구간 관리선, 설비 실시간 연결(시뮬레이터·HTTP·WebSocket), 고장 전 이탈 리드타임, 통계 기준 이상 감지, 정비·고장 이력으로 정상/이상 라벨링과 학습용 데이터셋을 만드는 브라우저 도구">
   <meta name="robots" content="noindex">
   <!-- 모든 css·js 에 판 질의(?v=)를 붙여, 배포 뒤 옛 파일과 새 파일이 섞여 돌지 않게 합니다(판을 올릴 때 한꺼번에 바꿈) -->
-  <link rel="stylesheet" href="css/style.css?v=2026-11-11.7">
+  <link rel="stylesheet" href="css/style.css?v=2026-11-11.8">
   <!-- auth-kit: 로그인 전에는 도구 화면을 감춘다(js/auth.js 가 판정 뒤 푼다) -->
   <script>document.documentElement.classList.add('auth-lock')</script>
-  <link rel="stylesheet" href="css/auth.css?v=2026-11-11.7">
-  <link rel="stylesheet" href="css/board.css?v=2026-11-11.7">
+  <link rel="stylesheet" href="css/auth.css?v=2026-11-11.8">
+  <link rel="stylesheet" href="css/board.css?v=2026-11-11.8">
   <!-- /auth-kit -->
-  <link rel="stylesheet" href="css/theme-hd.css?v=2026-11-11.7">
+  <link rel="stylesheet" href="css/theme-hd.css?v=2026-11-11.8">
   <!-- fresh-guard v3 (2026-10-21) — 배포 직후에도 강력 새로고침 없이 새 화면을 보이게 한다.
        GitHub Pages 는 HTML 을 max-age=600 으로 준다. 브라우저도, GitHub 앞단 캐시(Fastly)도 그동안 옛 HTML 을 줄 수 있다
        (Cloudflare 는 HTML 을 캐시하지 않는다 — cf-cache-status: DYNAMIC 실측).
@@ -68,25 +75,25 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- 로컬 파일(file://)로 열어도 돌도록 module 이 아닌 일반 스크립트로 불러옵니다 -->
-  <script src="vendor/xlsx.full.min.js?v=2026-11-11.7"></script>
-  <script src="js/logic.js?v=2026-11-11.7"></script>
-  <script src="js/spc.js?v=2026-11-11.7"></script>
-  <script src="js/pdm.js?v=2026-11-11.7"></script>
-  <script src="js/sample-data.js?v=2026-11-11.7"></script>
-  <script src="js/virtual-data.js?v=2026-11-11.7"></script>
-  <script src="js/label.js?v=2026-11-11.7"></script>
-  <script src="js/live.js?v=2026-11-11.7"></script>
-  <script src="js/store.js?v=2026-11-11.7"></script>
-  <script src="js/rawstore.js?v=2026-11-11.7"></script>
-  <script src="js/charts.js?v=2026-11-11.7"></script>
-  <script src="js/ai-endpoint.js?v=2026-11-11.7"></script>
-  <script src="js/ai-panel.js?v=2026-11-11.7"></script>
-  <script src="js/app.js?v=2026-11-11.7"></script>
+  <script src="vendor/xlsx.full.min.js?v=2026-11-11.8"></script>
+  <script src="js/logic.js?v=2026-11-11.8"></script>
+  <script src="js/spc.js?v=2026-11-11.8"></script>
+  <script src="js/pdm.js?v=2026-11-11.8"></script>
+  <script src="js/sample-data.js?v=2026-11-11.8"></script>
+  <script src="js/virtual-data.js?v=2026-11-11.8"></script>
+  <script src="js/label.js?v=2026-11-11.8"></script>
+  <script src="js/live.js?v=2026-11-11.8"></script>
+  <script src="js/store.js?v=2026-11-11.8"></script>
+  <script src="js/rawstore.js?v=2026-11-11.8"></script>
+  <script src="js/charts.js?v=2026-11-11.8"></script>
+  <script src="js/ai-endpoint.js?v=2026-11-11.8"></script>
+  <script src="js/ai-panel.js?v=2026-11-11.8"></script>
+  <script src="js/app.js?v=2026-11-11.8"></script>
   <!-- auth-kit: 로그인 · 사용 신청 · 승인(정본 data10-00/kit/auth) -->
-  <script src="vendor/supabase.js?v=2026-11-11.7"></script>
-  <script src="js/auth-config.js?v=2026-11-11.7"></script>
-  <script src="js/board.js?v=2026-11-11.7"></script>
-  <script src="js/auth.js?v=2026-11-11.7"></script>
+  <script src="vendor/supabase.js?v=2026-11-11.8"></script>
+  <script src="js/auth-config.js?v=2026-11-11.8"></script>
+  <script src="js/board.js?v=2026-11-11.8"></script>
+  <script src="js/auth.js?v=2026-11-11.8"></script>
   <!-- /auth-kit -->
 </body>
 </html>

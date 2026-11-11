@@ -233,6 +233,12 @@
       box.classList.toggle('hp-sl-light', !!(sl[i] && sl[i].tone === 'light'));   // 밝은 사진이면 글자를 어둡게
     }
     go(0);
+    // slides[].anim(움직이는 그림 gif) — 먼저 가벼운 사진을 보이고, 화면이 뜬 뒤 받아서 바꿔 끼운다(데이터 절약 · 모션 최소화면 건너뜀)
+    var conn = navigator.connection || {};
+    if (!reduce && !conn.saveData) sl.forEach(function (x, k) {
+      if (!x.anim || !track.children[k]) return;
+      setTimeout(function () { var im = new Image(); im.onload = function () { if (document.body.contains(track)) track.children[k].style.backgroundImage = 'url("' + absUrl(x.anim) + '")'; }; im.src = absUrl(x.anim); }, 1500);
+    });
     box.querySelectorAll('[data-sl]').forEach(function (b) {
       b.onclick = function () {
         var v = b.getAttribute('data-sl');
