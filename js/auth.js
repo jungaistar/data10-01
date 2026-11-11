@@ -209,8 +209,10 @@
     var sl = slides();
     return '<section class="hp-hero hp-slide" id="hp-top" aria-roledescription="carousel" aria-label="' + esc(title) + ' 소개 사진">' +
       '<div class="hp-sl-track" aria-hidden="true">' + sl.map(function (x) { return '<div class="hp-sl" style="background-image:url(&quot;' + esc(absUrl(x.image)) + '&quot;)"></div>'; }).join('') + '</div>' +
-      '<div class="hp-in hp-hero-in hp-slide-in"><div class="hp-hero-copy hp-rv">' + (eyebrow ? '<p class="hp-eyebrow">' + esc(eyebrow) + '</p>' : '') + '<h1>' + head + '</h1>' +
-      (lead ? '<p class="hp-lead">' + esc(lead) + '</p>' : '') + cta + trust + '</div></div>' +
+      '<div class="hp-in hp-hero-in hp-slide-in"><div class="hp-hero-copy hp-fx">' +
+      (LD.badge ? '<p class="hp-badge hp-fxi"' + (LD.badgeColor ? ' style="background:' + esc(LD.badgeColor) + ';color:#fff"' : '') + '>' + esc(LD.badge) + '</p>' : (eyebrow ? '<p class="hp-eyebrow hp-fxi">' + esc(eyebrow) + '</p>' : '')) +
+      '<h1>' + String(LD.headline || title).split('\n').map(function (ln) { return '<span class="hp-ln hp-fxi">' + esc(ln) + '</span>'; }).join('') + '</h1>' +
+      (lead ? '<p class="hp-lead hp-fxi">' + esc(lead) + '</p>' : '') + '<div class="hp-fxi">' + cta + '</div>' + (trust ? '<div class="hp-fxi">' + trust + '</div>' : '') + '</div></div>' +
       (sl.length > 1 ? '<div class="hp-sl-ctl"><button type="button" class="hp-sl-btn" data-sl="prev" aria-label="이전 사진">' + icon('arrow', 'hp-ic-s hp-flip') + '</button>' +
         '<div class="hp-sl-dots">' + sl.map(function (x, i) { return '<button type="button" data-sl="' + i + '" aria-label="사진 ' + (i + 1) + ' / ' + sl.length + (x.caption ? ' — ' + esc(x.caption) : '') + '"></button>'; }).join('') + '</div>' +
         '<button type="button" class="hp-sl-btn" data-sl="next" aria-label="다음 사진">' + icon('arrow', 'hp-ic-s') + '</button>' +
@@ -220,6 +222,9 @@
   function bindSlide() {
     if (slTimer) clearInterval(slTimer); slTimer = null;
     var box = gate.querySelector('.hp-slide'); if (!box) return;
+    // 글자가 한 줄씩 차례로 떠오른다(모션 최소화면 바로 보임)
+    box.querySelectorAll('.hp-fxi').forEach(function (el, k) { el.style.setProperty('--i', k); });
+    if (reduce) box.classList.add('hp-fx-on'); else requestAnimationFrame(function () { requestAnimationFrame(function () { box.classList.add('hp-fx-on'); }); });
     var track = box.querySelector('.hp-sl-track'), n = track.children.length, i = 0, hold = false, userPause = false, sl = slides(), cap = box.querySelector('.hp-sl-cap');
     function go(k, user) {
       i = (k + n) % n; track.style.transform = 'translateX(' + (-100 * i) + '%)';
@@ -277,11 +282,11 @@
       '<a class="hp-brand" href="#hp-top" aria-label="맨 위로">' + brand + (brand ? '<i class="hp-div" aria-hidden="true"></i>' : '') + tool + '</a>' +
       '<nav class="hp-links" aria-label="홈페이지 메뉴">' + (feats.length ? '<a href="#hp-features">기능</a>' : '') + (flow.length ? '<a href="#hp-flow">사용 순서</a>' : '') +
       (S.screen && ((heroImg && !cover) || banner || slideOn()) ? '<a href="#hp-screen">화면</a>' : '') + (S.plan ? '<a href="' + esc(S.plan) + '">기획서</a>' : '') + '</nav>' +
-      '<div class="hp-acts"><button type="button" class="hp-btn hp-ghost" data-login="login">로그인</button>' +
-      '<button type="button" class="hp-btn hp-primary" data-login="signup">시작하기</button></div></div></header>';
-    var cta = '<div class="hp-cta-row"><button type="button" class="hp-btn hp-primary hp-lg" data-login="login">로그인하고 시작하기 ' + icon('arrow', 'hp-ic-s') + '</button>' +
-      (S.plan ? '<a class="hp-btn hp-line hp-lg" href="' + esc(S.plan) + '">기획서 보기</a>' : '') + '</div>';
-    var trust = '<ul class="hp-trust-chips"><li>' + icon('shield', 'hp-ic-s') + '승인된 구성원만</li><li>' + icon('folder', 'hp-ic-s') + '자료는 내 브라우저에</li><li>' + icon('users', 'hp-ic-s') + '회사 · 개인 메일 가입</li></ul>';
+      (L.minimal ? '' : '<div class="hp-acts"><button type="button" class="hp-btn hp-ghost" data-login="login">로그인</button>' +
+      '<button type="button" class="hp-btn hp-primary" data-login="signup">시작하기</button></div>') + '</div></header>';
+    var cta = '<div class="hp-cta-row"><button type="button" class="hp-btn hp-primary hp-lg" data-login="login">' + esc(L.cta || (L.minimal ? '로그인' : '로그인하고 시작하기')) + ' ' + icon('arrow', 'hp-ic-s') + '</button>' +
+      (S.plan && !L.minimal ? '<a class="hp-btn hp-line hp-lg" href="' + esc(S.plan) + '">기획서 보기</a>' : '') + '</div>';
+    var trust = L.minimal ? '' : '<ul class="hp-trust-chips"><li>' + icon('shield', 'hp-ic-s') + '승인된 구성원만</li><li>' + icon('folder', 'hp-ic-s') + '자료는 내 브라우저에</li><li>' + icon('users', 'hp-ic-s') + '회사 · 개인 메일 가입</li></ul>';
     var frame = function (src, cap) {
       return '<figure class="hp-frame"><div class="hp-frame-bar"><i></i><i></i><i></i><span>' + esc((location.host || '').replace(/^www\./, '')) + '</span></div>' +
         '<img src="' + esc(src) + '" alt="' + esc(cap) + '" loading="lazy"></figure>';
@@ -304,7 +309,11 @@
         (lead ? '<p class="hp-lead">' + esc(lead) + '</p>' : '') + cta + trust + '</div>' +
         '<div class="hp-hero-vis hp-rv">' + visual + chips + '</div></div></section>';
     }
-    var goalsH = goals.length ? '<section class="hp-sec hp-goals"><div class="hp-in"><div class="hp-goal-grid">' + goals.map(function (g, i) {
+    // landing.cards = [{title, desc, icon}] 가 있으면 목표 3줄 대신 아이콘 카드로(08 요청: 작업 기록 · 실적 관리 · 공정 현황)
+    var cards = (L.cards || []).slice(0, 4);
+    var goalsH = cards.length ? '<section class="hp-sec hp-goals"><div class="hp-in"><div class="hp-goal-grid hp-card-grid">' + cards.map(function (c) {
+      return '<div class="hp-goal hp-cardi hp-rv"><span class="hp-cardi-ic">' + icon(c.icon || iconFor(c.title), 'hp-ic') + '</span><div><b>' + esc(c.title) + '</b>' + (c.desc ? '<p>' + esc(c.desc) + '</p>' : '') + '</div></div>';
+    }).join('') + '</div></div></section>' : goals.length ? '<section class="hp-sec hp-goals"><div class="hp-in"><div class="hp-goal-grid">' + goals.map(function (g, i) {
       return '<div class="hp-goal hp-rv"><span class="hp-goal-n">0' + (i + 1) + '</span><p>' + esc(g) + '</p></div>';
     }).join('') + '</div></div></section>' : '';
     var featH = feats.length ? '<section class="hp-sec" id="hp-features"><div class="hp-in"><div class="hp-head hp-rv"><p class="hp-kicker">기능</p><h2>현장에서 바로 쓰는 기능</h2></div>' +

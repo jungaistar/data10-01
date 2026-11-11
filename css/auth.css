@@ -556,3 +556,16 @@ html.auth-lock body { overflow: hidden; }
 .hp-slide.hp-sl-light .hp-sl-cap { color: var(--ag-ink); }
 .hp-slide.hp-sl-light .hp-sl-dots button::before { background: color-mix(in srgb, var(--ag-navy) 35%, transparent); }
 .hp-slide.hp-sl-light .hp-sl-dots button[aria-current="true"]::before { background: var(--ag-navy); }
+
+/* 슬라이드 히어로 글자: 배지 · 제목 줄 · 설명 · 단추가 차례로 떠오른다 */
+.hp-ln { display: block; }
+.hp-fx .hp-fxi { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2, .7, .2, 1); transition-delay: calc(var(--i, 0) * 140ms + 120ms); }
+.hp-fx-on .hp-fx .hp-fxi { opacity: 1; transform: none; }
+.hp-badge { display: inline-flex; align-items: center; margin: 0 0 18px; padding: 7px 16px; border-radius: 999px; background: var(--ag-accent); color: #1a1205; font-size: 15px; font-weight: 800; letter-spacing: .01em; box-shadow: 0 6px 18px rgba(0, 0, 0, .22); }
+.hp-slide .hp-lead { margin-bottom: 4px; }
+@media (prefers-reduced-motion: reduce) { .hp-fx .hp-fxi { opacity: 1; transform: none; transition: none; } }
+/* landing.cards — 아이콘 카드 */
+.hp-cardi { display: flex; align-items: flex-start; gap: 14px; }
+.hp-cardi-ic { flex: none; width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--ag-brand) 12%, #fff); color: var(--ag-brand-d); }
+.hp-cardi b { display: block; font-size: 18px; color: var(--ag-ink); }
+.hp-cardi p { margin: 4px 0 0; font-size: 14.5px; color: var(--ag-sub); }
